@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "test",
+      "type": "npm",
+      "script": "test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "lint",
+      "type": "npm",
+      "script": "lint",
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "web: build",
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "desktop: dev",
+      "type": "npm",
+      "script": "desktop:dev",
+      "isBackground": false,
+      "problemMatcher": []
+    },
+    {
+      "label": "desktop: prepare",
+      "dependsOrder": "sequence",
+      "dependsOn": ["web: build"],
+      "problemMatcher": []
+    },
+    {
+      "label": "desktop: Windows distribution",
+      "type": "npm",
+      "script": "desktop:dist:win",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

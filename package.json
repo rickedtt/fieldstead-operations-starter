@@ -1,0 +1,119 @@
+{
+  "name": "fieldstead-operations-starter",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Fieldstead Systems internal Operations Starter dogfood system.",
+  "author": "Fieldstead Systems",
+  "main": "electron/main.mjs",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vinext dev",
+    "build": "vinext build",
+    "start": "vinext start",
+    "desktop:dev": "npm run build && electron .",
+    "desktop:build": "npm run desktop:prepare-server && npm run package:validate && electron-builder --dir",
+    "desktop:dist:win": "npm run desktop:prepare-server && npm run package:validate && electron-builder --win nsis portable --x64",
+    "desktop:validate": "npm run package:validate",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern release",
+    "package:validate": "node scripts/validate-desktop-package.mjs && npm pack --dry-run",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "desktop:dist:portable": "npm run desktop:prepare-server && npm run package:validate && electron-builder --win portable --x64",
+    "desktop:publish:hq": "npm run desktop:dist:portable && node scripts/publish-windows-demo-to-hq.mjs",
+    "desktop:prepare-server": "npm run build && npm install --omit=dev --prefix dist/standalone vinext@1.0.0-beta.3"
+  },
+  "dependencies": {
+    "dexie": "^4.2.0",
+    "next": "^16.3.3",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "vinext": "1.0.0-beta.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/workers-types": "4.20260515.1",
+    "@openai/sites-vite-plugin": "^0.1.0 || ^0.2.0",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "fake-indexeddb": "^6.2.4",
+    "node-addon-api": "8.5.0",
+    "node-gyp": "11.4.2",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "vite": "8.0.13",
+    "vitest": "4.0.18",
+    "wrangler": "4.92.0"
+  },
+  "type": "module",
+  "build": {
+    "appId": "com.fieldstead.operations.starter",
+    "productName": "Fieldstead Operations Starter",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json",
+      "!electron/**/*.test.*",
+      "!node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/standalone",
+        "to": "server",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "dist/standalone/node_modules",
+        "to": "server/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 520" role="img" aria-labelledby="title desc">
+<title id="title">Fieldstead Systems refined wordmark</title>
+<desc id="desc">A refined wordmark for Fieldstead Systems, a small-business CRM and operations company.</desc>
+<rect width="1600" height="520" fill="none"/>
+<g transform="translate(150 108)">
+  <text x="0" y="160" font-family="Georgia, 'Times New Roman', serif" font-size="142" font-weight="700" letter-spacing="-4" fill="#17324D">Fieldstead</text>
+  <rect x="5" y="202" width="1030" height="2" fill="#C8894B"/>
+  <text x="8" y="274" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" letter-spacing="16" fill="#587083">SYSTEMS</text>
+  <text x="10" y="325" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="600" letter-spacing="3.2" fill="#849199">CRM • WORKFLOW • OPERATIONS</text>
+</g>
+</svg>

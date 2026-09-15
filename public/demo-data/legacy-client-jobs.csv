@@ -1,0 +1,8 @@
+customer_ref,job_ref,customer_name,email,phone,address,service,description,amount,status
+LEG-C100,LEG-J700,Olivia Sample,olivia.sample@example.test,(312) 555-0108,"811 Demo Harbor Ln, Chicago, IL",Seasonal gutter service,"Clean gutters and inspect downspouts",340,Scheduled
+LEG-C101,LEG-J701,Marcus Example,marcus.example@example.test,(773) 555-0136,"245 Fictional Pine St, Chicago, IL",House wash,"Two-story soft wash; protect test garden",525,Quoted
+LEG-C100,LEG-J702,Olivia Sample,olivia.sample@example.test,(312) 555-0108,"811 Demo Harbor Ln, Chicago, IL",Patio wash,"Rear patio and walk",285,Completed
+LEG-C102,LEG-J703,Nora Placeholder,nora.placeholder@example.test,(872) 555-0119,"92 Sample Shore Ave, Chicago, IL",Window washing,Exterior windows only,410,Scheduled
+LEG-C103,LEG-J704,Taylor Fiction,taylor.fiction@example.test,(312) 555-0197,"1700 Mockingbird Ct, Chicago, IL",,"Missing service field for validation",250,Quoted
+LEG-C104,LEG-J705,Riley Demo,not-an-email,555,"61 Imaginary Way, Chicago, IL",Fence wash,"Invalid contact example",390,Quoted
+LEG-C101,LEG-J701,Marcus Example,marcus.example@example.test,(773) 555-0136,"245 Fictional Pine St, Chicago, IL",House wash,"Duplicate source job candidate",525,Quoted
