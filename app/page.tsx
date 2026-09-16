@@ -165,7 +165,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark" aria-hidden="true">F</span><span>Fieldstead Systems<small>OPERATIONS STARTER</small></span></div>
+        <div className="brand"><Image className="brand-logo" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/></div>
         <div className="prototype-signature"><Image src="/assets/fieldstead-systems-refined.svg" width={1600} height={520} alt="Fieldstead Systems" priority/><span>{PROTOTYPE_LABEL}</span></div>
         <nav aria-label="Main navigation">
           {(['Overview','Jobs','Customers','Activity','Client Delivery'] as View[]).map((item) => (
@@ -180,7 +180,7 @@ export default function Home() {
 
       <section className="workspace">
         <header className="topbar">
-          <button className="mobile-brand" aria-label="Go to overview" onClick={() => setView('Overview')}>FS</button>
+          <button className="mobile-brand" aria-label="Go to overview" onClick={() => setView('Overview')}><Image src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems"/></button>
           <div><p className="eyebrow">FIELDSTEAD SYSTEMS · LOCAL-FIRST DOGFOOD</p><h1>{view === 'Overview' ? 'Owner operations, at a glance.' : view}</h1><p className={cx('mobile-local-status', localJobs.error && 'failed')} role="status">{localStatus}</p></div>
           <div className="header-actions"><button className="migration-action" onClick={() => void migratePreviousData()}>Import previous local data</button><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></div>
         </header>
