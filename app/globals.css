@@ -22,3 +22,18 @@
 @media(max-width:1050px){.delivery-grid{grid-template-columns:1fr}.workflow-chain{grid-template-columns:repeat(9,110px)}.count-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:800px){.prototype-signature{display:none}.dogfood-banner{align-items:flex-start;flex-direction:column;gap:2px}.mobile-nav{grid-template-columns:repeat(5,1fr)}.delivery-intro{padding:20px}.delivery-intro h2{font-size:25px}.demo-seal{width:64px;height:64px}.delivery-card{padding:18px}}
 @media(max-width:520px){.delivery-intro{align-items:flex-start}.demo-seal{display:none}.mapping-grid{grid-template-columns:1fr}.count-grid{grid-template-columns:repeat(2,1fr)}.issue-list>div{grid-template-columns:50px 72px 1fr}.workflow-chain{margin-inline:-2px}.migration-action{display:none}}
+
+/* Fieldstead display modes: dark is explicit and independent of OS preference. */
+.app-shell.theme-dark{--ink:#e9f2ec;--muted:#a7b8ae;--paper:#101714;--card:#17231e;--line:#304139;--green:#68a88e;--green-dark:#0b2119;--sage:#263b31;--amber:#4d3e20;--rose:#4b2d2a;--blue:#233d42;--shadow:0 16px 50px rgb(0 0 0 / 30%)}
+.theme-dark .workspace,.theme-dark .topbar,.theme-dark .content{background:var(--paper);color:var(--ink)}
+.theme-dark .metric-grid article,.theme-dark .attention-card,.theme-dark .activity-peek,.theme-dark .customer-card,.theme-dark .job-table,.theme-dark .table-row,.theme-dark .modal,.theme-dark .drawer,.theme-dark .empty,.theme-dark .settings-card{background:var(--card);color:var(--ink);border-color:var(--line)}
+.theme-dark input,.theme-dark select,.theme-dark textarea{background:#111b17;color:var(--ink);border-color:var(--line)}
+.theme-dark .dogfood-banner{background:#20352b;color:#d8e8dc;border-color:var(--line)}
+.theme-dark .dogfood-banner span,.theme-dark .eyebrow,.theme-dark small,.theme-dark .settings-copy{color:var(--muted)}
+.theme-dark .value-strip{background:#1d352b;color:var(--ink)}
+.theme-dark .mobile-nav{background:rgb(23 35 30 / 96%);border-color:var(--line)}
+.theme-dark .mobile-nav button{color:#9bb0a5}
+.theme-dark .close,.theme-dark .secondary{background:#23322c;color:var(--ink);border-color:var(--line)}
+.theme-dark .change-log{border-top-color:var(--line)}
+.theme-dark .change-log article{border-bottom-color:var(--line)}
+.theme-picker{display:flex;gap:10px;flex-wrap:wrap}.change-log{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}.change-log article{display:grid;grid-template-columns:112px 1fr;gap:18px;padding:13px 0;border-bottom:1px solid var(--line)}.change-log article strong,.change-log article small{display:block}.change-log article small{margin-top:4px;color:var(--muted);font-size:11px}.change-log article p{margin:0;color:var(--muted);line-height:1.5}

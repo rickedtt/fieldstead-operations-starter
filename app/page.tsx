@@ -15,6 +15,13 @@ import {
 import { useFieldsteadLocalJobs } from './store/fieldstead-local';
 
 type View = 'Overview' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Settings';
+type Theme = 'dark' | 'light';
+
+const UPDATE_CHANGELOG = [
+  { version: 'Current', date: 'September 16, 2026', detail: 'Fixed desktop startup and GitHub updater loading so the program opens normally.' },
+  { version: 'Previous', date: 'September 16, 2026', detail: 'Added GitHub release updates, customer removal, an empty starting workspace, and simplified Overview branding.' },
+  { version: 'Previous', date: 'September 16, 2026', detail: 'Replaced generic branding with the Fieldstead Systems logo and added the Omarchy application launcher.' },
+] as const;
 
 declare global {
   interface Window {
@@ -66,6 +73,14 @@ export default function Home() {
     [uiState, localJobs.jobs],
   );
   const [view, setView] = useState<View>('Overview');
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return 'dark';
+    return window.localStorage.getItem('fieldstead-theme') === 'light' ? 'light' : 'dark';
+  });
+  useEffect(() => {
+    window.localStorage.setItem('fieldstead-theme', theme);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedJobId, setSelectedJobId] = useState<string>();
@@ -182,7 +197,7 @@ export default function Home() {
   function goToJobs(filter = 'All') { setStatusFilter(filter); setQuery(''); setView('Jobs'); }
 
   return (
-    <main className="app-shell">
+    <main className={cx('app-shell', `theme-${theme}`)}>
       <aside className="sidebar">
         <div className="brand"><Image className="brand-logo" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/></div>
         <nav aria-label="Main navigation">
@@ -210,7 +225,7 @@ export default function Home() {
           {view === 'Customers' && <CustomersView state={state} query={query} setQuery={setQuery} openCustomer={setSelectedCustomerId} newCustomer={() => setModal('customer')} />}
           {view === 'Activity' && <ActivityView state={state} openJob={setSelectedJobId} />}
           {view === 'Client Delivery' && <ClientDeliveryView state={state} applyImport={applyStagedImport} restore={restoreBackup} />}
-          {view === 'Settings' && <SettingsView />}
+          {view === 'Settings' && <SettingsView theme={theme} setTheme={setTheme} />}
         </div>
 
         <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -227,7 +242,7 @@ export default function Home() {
   );
 }
 
-function SettingsView() {
+function SettingsView({ theme, setTheme }: { theme: Theme; setTheme: (theme: Theme) => void }) {
   const [status, setStatus] = useState('Checking GitHub for updates…');
   const [available, setAvailable] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -249,8 +264,9 @@ function SettingsView() {
     await window.fieldsteadDesktop?.installUpdate();
   }
   return <div className="settings-page">
-    <div className="activity-intro"><p className="eyebrow">SETTINGS</p><h2>Fieldstead Systems</h2><p>Local work stays on this device. Desktop updates come from the published Fieldstead Operations Starter release on GitHub.</p></div>
-    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">GITHUB UPDATES</p><h2>Keep this program current</h2></div><span className="pill pill-approved">GitHub</span></div><p className="settings-copy">Updates appear here only when a newer Fieldstead release has been published.</p>{(available || downloaded) && <div className="header-actions">{!downloaded && <button className="primary" onClick={() => void download()}>Download update</button>}{downloaded && <button className="primary" onClick={() => void install()}>Restart and install</button>}</div>}<p className="settings-status" role="status">{status}</p></section>
+    <div className="activity-intro"><p className="eyebrow">SETTINGS</p><h2>Fieldstead Systems</h2><p>Choose how the program looks. This preference is saved on this device and does not follow the operating system.</p></div>
+    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">APPEARANCE</p><h2>Display mode</h2></div><span className="pill pill-approved">{theme === 'dark' ? 'Dark' : 'Light'}</span></div><p className="settings-copy">Dark mode is the default. Light mode is available when you prefer a brighter workspace.</p><div className="theme-picker" role="group" aria-label="Display mode"><button className={theme === 'dark' ? 'primary' : 'secondary'} onClick={() => setTheme('dark')}>Dark mode</button><button className={theme === 'light' ? 'primary' : 'secondary'} onClick={() => setTheme('light')}>Light mode</button></div></section>
+    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">GITHUB UPDATES</p><h2>Keep this program current</h2></div><span className="pill pill-approved">GitHub</span></div><p className="settings-copy">Updates appear here only when a newer Fieldstead release has been published.</p>{(available || downloaded) && <div className="header-actions">{!downloaded && <button className="primary" onClick={() => void download()}>Download update</button>}{downloaded && <button className="primary" onClick={() => void install()}>Restart and install</button>}</div>}<p className="settings-status" role="status">{status}</p><div className="change-log"><p className="eyebrow">CHANGE LOG</p>{UPDATE_CHANGELOG.map((entry) => <article key={`${entry.version}-${entry.detail}`}><div><strong>{entry.version}</strong><small>{entry.date}</small></div><p>{entry.detail}</p></article>)}</div></section>
   </div>;
 }
 
