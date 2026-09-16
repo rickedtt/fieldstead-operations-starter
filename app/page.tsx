@@ -192,17 +192,17 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner<small>LOCAL WORKSPACE</small></span><button aria-label="Reset local Fieldstead records" title="Reset local Fieldstead records" onClick={resetDemo}>↻</button></div>
+        <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner</span><button aria-label="Reset local Fieldstead records" title="Reset local Fieldstead records" onClick={resetDemo}>↻</button></div>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
           <button className="mobile-brand" aria-label="Go to overview" onClick={() => setView('Overview')}><Image src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems"/></button>
-          <div><p className="eyebrow">FIELDSTEAD SYSTEMS · LOCAL-FIRST</p><h1>{view === 'Overview' ? 'Owner operations, at a glance.' : view}</h1></div>
+          <div><p className="eyebrow">FIELDSTEAD SYSTEMS</p><h1>{view === 'Overview' ? 'Owner operations, at a glance.' : view}</h1></div>
           <div className="header-actions"><button className="migration-action" onClick={() => void migratePreviousData()}>Import previous local data</button><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></div>
         </header>
 
-        <div className="dogfood-banner" role="note"><strong>Local-first operations workspace.</strong><span>Enter confirmed Fieldstead records only · no customer messages, invoices, or payments are sent.</span></div>
+        <div className="dogfood-banner" role="note"><span>Confirmed Fieldstead records only · no customer messages, invoices, or payments are sent.</span></div>
 
         <div className="content">
           {view === 'Overview' && <Overview state={state} approvedPipeline={approvedPipeline} unpaid={unpaid} attention={needsAttention} openJob={(id) => setSelectedJobId(id)} goToJobs={goToJobs} />}
@@ -264,7 +264,7 @@ function Overview({ state, approvedPipeline, unpaid, attention, openJob, goToJob
   const overdue = state.jobs.filter((job) => job.invoiceStatus === 'Overdue').length;
   const unscheduled = state.jobs.filter((job) => job.quoteStatus === 'Approved' && !job.scheduledFor).length;
   return <>
-    <section className="value-strip"><div><span className="value-icon">✓</span><p><strong>Nothing gets lost after “yes.”</strong><br/>Estimates, owner handoffs, and payment follow-up stay visible in one place.</p></div><span>Local workspace · confirmed records only</span></section>
+    <section className="value-strip"><div><span className="value-icon">✓</span><p><strong>Nothing gets lost after “yes.”</strong><br/>Estimates, owner handoffs, and payment follow-up stay visible in one place.</p></div><span>Confirmed records only</span></section>
     <section className="metric-grid" aria-label="Operations summary">
       <article><p>Open jobs</p><strong>{state.jobs.filter((job) => !['Completed','Canceled'].includes(job.status)).length}</strong><small>{unscheduled ? `${unscheduled} approved, not scheduled` : 'All approved work is scheduled'}</small></article>
       <article><p>Approved pipeline</p><strong>{money.format(approvedPipeline)}</strong><small>Scheduled and active work</small></article>
@@ -385,8 +385,8 @@ function ClientDeliveryView({ state, applyImport, restore }: { state:OperationsS
 
   return <div className="delivery-page">
     <section className="delivery-intro">
-      <div><p className="eyebrow">{PROTOTYPE_LABEL.toUpperCase()} · LOCAL WORKSPACE</p><h2>One accountable client-delivery chain</h2><p>Use this view to manage confirmed Fieldstead work and rehearse recovery without contacting a customer, payment provider, or external service.</p></div>
-      <span className="demo-seal">LOCAL<br/>FIRST</span>
+      <div><p className="eyebrow">{PROTOTYPE_LABEL.toUpperCase()}</p><h2>One accountable client-delivery chain</h2><p>Use this view to manage confirmed Fieldstead work and rehearse recovery without contacting a customer, payment provider, or external service.</p></div>
+      <span className="demo-seal">FIELDSTEAD</span>
     </section>
 
     <ol className="workflow-chain" aria-label="Fieldstead local delivery workflow">
