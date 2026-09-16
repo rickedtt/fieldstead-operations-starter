@@ -181,17 +181,10 @@ export default function Home() {
   }
   function goToJobs(filter = 'All') { setStatusFilter(filter); setQuery(''); setView('Jobs'); }
 
-  const localStatus = localJobs.loading
-    ? 'Loading local data'
-    : localJobs.error
-      ? 'Local save failed'
-      : 'Saved locally';
-
   return (
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand"><Image className="brand-logo" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/></div>
-        <div className="prototype-signature"><Image src="/assets/fieldstead-systems-refined.svg" width={1600} height={520} alt="Fieldstead Systems" priority/><span>{PROTOTYPE_LABEL}</span></div>
         <nav aria-label="Main navigation">
           {(['Overview','Jobs','Customers','Activity','Client Delivery','Settings'] as View[]).map((item) => (
             <button key={item} className={cx('nav-item', view === item && 'active')} onClick={() => setView(item)}>
@@ -199,14 +192,13 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className={cx('local-note', localJobs.error && 'local-note-error')} title={localJobs.error?.message}><span aria-hidden="true">●</span><div><strong role="status">{localStatus}</strong><small>Local-first; sync endpoint not configured</small></div></div>
         <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner<small>LOCAL WORKSPACE</small></span><button aria-label="Reset local Fieldstead records" title="Reset local Fieldstead records" onClick={resetDemo}>↻</button></div>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
           <button className="mobile-brand" aria-label="Go to overview" onClick={() => setView('Overview')}><Image src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems"/></button>
-          <div><p className="eyebrow">FIELDSTEAD SYSTEMS · LOCAL-FIRST</p><h1>{view === 'Overview' ? 'Owner operations, at a glance.' : view}</h1><p className={cx('mobile-local-status', localJobs.error && 'failed')} role="status">{localStatus}</p></div>
+          <div><p className="eyebrow">FIELDSTEAD SYSTEMS · LOCAL-FIRST</p><h1>{view === 'Overview' ? 'Owner operations, at a glance.' : view}</h1></div>
           <div className="header-actions"><button className="migration-action" onClick={() => void migratePreviousData()}>Import previous local data</button><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></div>
         </header>
 
