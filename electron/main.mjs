@@ -3,7 +3,8 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, session, autoUpdater } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import {
   isAllowedDesktopUrl,
   isAllowedNavigationUrl,
@@ -221,7 +222,7 @@ app.whenReady().then(async () => {
     const child = startServer(port);
     await waitForServer(url, child);
     await createWindow(url);
-    if (app.isPackaged) void autoUpdater.checkForUpdates().catch(() => undefined);
+    if (app.isPackaged) void Promise.resolve(autoUpdater.checkForUpdates()).catch(() => undefined);
   } catch (error) {
     await stopServer();
     dialog.showErrorBox(
