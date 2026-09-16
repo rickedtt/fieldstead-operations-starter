@@ -26,7 +26,7 @@ const now = '2026-08-30T09:00:00-05:00';
 const ownerActor = 'Fieldstead owner';
 const demoNote = 'Synthetic dogfood record — not a real customer.';
 
-export const seedState: OperationsState = {
+export const syntheticDemoState: OperationsState = {
   customers: [
     { id:'demo-fs-cus-northstar', name:'Northstar Bicycle Repair (Demo)', phone:'(312) 555-0101', email:'northstar@example.com', address:'100 Demo Way, Chicago, IL', notes:`${demoNote} Owner prefers a concise weekly operations summary.`, createdAt:'2026-07-12T10:00:00-05:00' },
     { id:'demo-fs-cus-hearth', name:'Hearth & Hammer Workshop (Demo)', phone:'(312) 555-0102', email:'hearth@example.com', address:'200 Sample Street, Chicago, IL', notes:`${demoNote} Use the side entrance for the workflow rehearsal.`, createdAt:'2026-07-22T14:30:00-05:00' },
@@ -53,6 +53,20 @@ export const seedState: OperationsState = {
     { id:'demo-fs-act-5', at:'2026-08-26T15:00:00-05:00', jobId:'FS-DEMO-1051', customerId:'demo-fs-cus-copper', actor:ownerActor, action:'Estimate marked sent', detail:'Estimate for $290 marked sent (demo only; no message delivered).' },
     { id:'demo-fs-act-6', at:'2026-08-24T08:00:00-05:00', jobId:'FS-DEMO-1044', customerId:'demo-fs-cus-ember', actor:'Demo system', action:'Invoice became overdue', detail:'Synthetic invoice balance of $380 remains unpaid.' },
   ],
+};
+
+export const seedState: OperationsState = {
+  customers: [{
+    id: 'fieldstead-internal',
+    name: 'Fieldstead Systems',
+    phone: '',
+    email: '',
+    address: '',
+    notes: 'Internal Fieldstead dogfood workspace. Enter only confirmed business information; no fictional customer records are preloaded.',
+    createdAt: '2026-09-15T00:00:00-05:00',
+  }],
+  jobs: [],
+  activity: [],
 };
 
 export const statusOrder: JobStatus[] = ['Quoted','Scheduled','En route','In progress','Completed'];
@@ -104,7 +118,7 @@ export function setInvoiceStatus(state: OperationsState, jobId: string, invoiceS
 
 export function createJob(state: OperationsState, input: { customerId:string; service:string; quoteAmount:number; scheduledFor?:string; description?:string }, at = new Date().toISOString()): OperationsState {
   const maxNumber = Math.max(...state.jobs.map((job) => Number(job.id.split('-').at(-1)) || 1000));
-  const job: Job = { id:`FS-DEMO-${maxNumber + 1}`, customerId:input.customerId, service:input.service, description:input.description || '', quoteStatus:'Draft', quoteAmount:input.quoteAmount, scheduledFor:input.scheduledFor, durationHours:2, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:input.quoteAmount, createdAt:at, updatedAt:at };
+  const job: Job = { id:`FS-OPS-${maxNumber + 1}`, customerId:input.customerId, service:input.service, description:input.description || '', quoteStatus:'Draft', quoteAmount:input.quoteAmount, scheduledFor:input.scheduledFor, durationHours:2, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:input.quoteAmount, createdAt:at, updatedAt:at };
   return { ...state, jobs:[job, ...state.jobs], activity:[{ id:`act-${Date.now()}-${state.activity.length}`, at, jobId:job.id, customerId:job.customerId, actor:ownerActor, action:'Job created', detail:`${job.service} added with a $${job.quoteAmount} draft estimate.` }, ...state.activity] };
 }
 

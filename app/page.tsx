@@ -109,11 +109,11 @@ export default function Home() {
     });
   }
   function resetDemo() {
-    if (window.confirm('Reset all local changes and restore the synthetic demo data?')) {
+    if (window.confirm('Clear all local Fieldstead records and restore the empty starting workspace?')) {
       setUiState(structuredClone(seedState));
       setSelectedJobId(undefined);
       setSelectedCustomerId(undefined);
-      setToast('Demo data restored');
+      setToast('Empty Fieldstead workspace restored');
       void localJobs.restoreSeedJobs().catch(() => undefined);
     }
   }
@@ -174,8 +174,8 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className={cx('local-note', localJobs.error && 'local-note-error')} title={localJobs.error?.message}><span aria-hidden="true">●</span><div><strong role="status">{localStatus}</strong><small>No cloud account required</small></div></div>
-        <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner<small>INTERNAL DOGFOOD</small></span><button aria-label="Reset demo data" title="Reset demo data" onClick={resetDemo}>↻</button></div>
+        <div className={cx('local-note', localJobs.error && 'local-note-error')} title={localJobs.error?.message}><span aria-hidden="true">●</span><div><strong role="status">{localStatus}</strong><small>Local-first; sync endpoint not configured</small></div></div>
+        <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner<small>INTERNAL DOGFOOD</small></span><button aria-label="Reset local Fieldstead records" title="Reset local Fieldstead records" onClick={resetDemo}>↻</button></div>
       </aside>
 
       <section className="workspace">
@@ -185,7 +185,7 @@ export default function Home() {
           <div className="header-actions"><button className="migration-action" onClick={() => void migratePreviousData()}>Import previous local data</button><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></div>
         </header>
 
-        <div className="dogfood-banner" role="note"><strong>Fieldstead is using its own product.</strong><span>Synthetic demo data only · no customer messages, invoices, or payments are sent.</span></div>
+        <div className="dogfood-banner" role="note"><strong>Fieldstead is using its own product.</strong><span>Enter confirmed Fieldstead records only · no customer messages, invoices, or payments are sent.</span></div>
 
         <div className="content">
           {view === 'Overview' && <Overview state={state} approvedPipeline={approvedPipeline} unpaid={unpaid} attention={needsAttention} openJob={(id) => setSelectedJobId(id)} goToJobs={goToJobs} />}
@@ -215,7 +215,7 @@ function Overview({ state, approvedPipeline, unpaid, attention, openJob, goToJob
   const overdue = state.jobs.filter((job) => job.invoiceStatus === 'Overdue').length;
   const unscheduled = state.jobs.filter((job) => job.quoteStatus === 'Approved' && !job.scheduledFor).length;
   return <>
-    <section className="value-strip"><div><span className="value-icon">✓</span><p><strong>Nothing gets lost after “yes.”</strong><br/>Estimates, owner handoffs, and payment follow-up stay visible in one place.</p></div><span>Dogfood · synthetic data</span></section>
+    <section className="value-strip"><div><span className="value-icon">✓</span><p><strong>Nothing gets lost after “yes.”</strong><br/>Estimates, owner handoffs, and payment follow-up stay visible in one place.</p></div><span>Dogfood · confirmed records only</span></section>
     <section className="metric-grid" aria-label="Operations summary">
       <article><p>Open jobs</p><strong>{state.jobs.filter((job) => !['Completed','Canceled'].includes(job.status)).length}</strong><small>{unscheduled ? `${unscheduled} approved, not scheduled` : 'All approved work is scheduled'}</small></article>
       <article><p>Approved pipeline</p><strong>{money.format(approvedPipeline)}</strong><small>Scheduled and active work</small></article>
@@ -310,7 +310,7 @@ function ClientDeliveryView({ state, applyImport, restore }: { state:OperationsS
     setRows([]);
     setStaged(undefined);
     setConfirmed(false);
-    setMessage('Import confirmed and applied to synthetic demo state.');
+    setMessage('Import confirmed and applied to local Fieldstead records.');
   }
 
   function downloadBackup() {
@@ -321,14 +321,14 @@ function ClientDeliveryView({ state, applyImport, restore }: { state:OperationsS
     anchor.download = `fieldstead-demo-backup-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setMessage('Synthetic JSON backup downloaded.');
+    setMessage('Local Fieldstead JSON backup downloaded.');
   }
 
   async function restoreFile(file?: File) {
     if (!file) return;
     try {
       restore(parseBackup(await file.text()).state);
-      setMessage(`Restored ${file.name}. This affected synthetic browser data only.`);
+      setMessage(`Restored ${file.name}. This affected local Fieldstead browser data only.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Backup could not be restored.');
     }
@@ -336,8 +336,8 @@ function ClientDeliveryView({ state, applyImport, restore }: { state:OperationsS
 
   return <div className="delivery-page">
     <section className="delivery-intro">
-      <div><p className="eyebrow">{PROTOTYPE_LABEL.toUpperCase()} · SYNTHETIC / DEMO ONLY</p><h2>One accountable client-delivery chain</h2><p>Use this view to rehearse handoffs, data transfer, and recovery without contacting a customer, payment provider, or external service.</p></div>
-      <span className="demo-seal">LOCAL<br/>DEMO</span>
+      <div><p className="eyebrow">{PROTOTYPE_LABEL.toUpperCase()} · FIELDSTEAD DOGFOOD</p><h2>One accountable client-delivery chain</h2><p>Use this view to manage confirmed Fieldstead work and rehearse recovery without contacting a customer, payment provider, or external service.</p></div>
+      <span className="demo-seal">LOCAL<br/>DOGFOOD</span>
     </section>
 
     <ol className="workflow-chain" aria-label="Fieldstead dogfood delivery workflow">
@@ -347,7 +347,7 @@ function ClientDeliveryView({ state, applyImport, restore }: { state:OperationsS
     <div className="delivery-grid">
       <section className="delivery-card import-card">
         <div className="card-heading"><div><p className="eyebrow">STAGED TRANSFER</p><h2>Legacy CSV import</h2></div><span className="safe-state">Preview first</span></div>
-        <p className="card-copy">Load a CSV, map its columns, and validate every row. Source identifiers become the demo customer and job IDs. No live demo record changes until you explicitly confirm.</p>
+        <p className="card-copy">Load an approved Fieldstead CSV, map its columns, and validate every row. No local record changes occur until you explicitly confirm.</p>
         <div className="file-actions">
           <button className="secondary" onClick={() => void loadSample()}>Load bundled sample</button>
           <label className="secondary file-button">Choose CSV<input type="file" accept=".csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void file.text().then((source) => loadCsv(source, file.name)); }}/></label>
@@ -360,18 +360,18 @@ function ClientDeliveryView({ state, applyImport, restore }: { state:OperationsS
         {staged && <div className="validation-results" aria-live="polite">
           <div className="count-grid">{Object.entries(staged.counts).map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
           {staged.issues.length > 0 && <div className="issue-list"><h3>Rows held back</h3>{staged.issues.map((issue) => <div key={`${issue.row}-${issue.kind}`}><span>Row {issue.row}</span><StatusPill>{issue.kind}</StatusPill><p>{issue.sourceId} · {issue.detail}</p></div>)}</div>}
-          <label className="confirm-import"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}/><span>I reviewed the validation report and want to import {staged.counts.imported} synthetic records.</span></label>
-          <button className="primary full" disabled={!confirmed || staged.counts.imported === 0} onClick={confirmImport}>Confirm synthetic import</button>
+          <label className="confirm-import"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}/><span>I reviewed the validation report and want to import {staged.counts.imported} Fieldstead records.</span></label>
+          <button className="primary full" disabled={!confirmed || staged.counts.imported === 0} onClick={confirmImport}>Confirm Fieldstead import</button>
         </div>}
       </section>
 
       <aside className="delivery-card backup-card">
         <div className="card-heading"><div><p className="eyebrow">BACKUP &amp; RECOVERY</p><h2>Demo continuity</h2></div><span className="safe-state">JSON · local</span></div>
-        <p className="card-copy">Export the current customers, jobs, and audit activity. Restore accepts only a versioned Fieldstead synthetic-demo backup.</p>
+        <p className="card-copy">Export the current Fieldstead customers, jobs, and audit activity. Restore accepts only a versioned Fieldstead dogfood backup.</p>
         <dl><div><dt>Customers</dt><dd>{state.customers.length}</dd></div><div><dt>Jobs</dt><dd>{state.jobs.length}</dd></div><div><dt>Audit events</dt><dd>{state.activity.length}</dd></div></dl>
         <button className="primary full" onClick={downloadBackup}>Download JSON backup</button>
         <label className="secondary restore-button">Restore from backup<input type="file" accept="application/json,.json" onChange={(event) => { void restoreFile(event.target.files?.[0]); event.target.value = ''; }}/></label>
-        <p className="boundary-note">No credentials, provider calls, remote writes, or real customer data are used.</p>
+        <p className="boundary-note">No credentials, provider calls, or remote writes are used. Shared-device sync is not configured yet.</p>
       </aside>
     </div>
     <p className="delivery-message" role="status">{message}</p>
