@@ -221,6 +221,7 @@ app.whenReady().then(async () => {
     const child = startServer(port);
     await waitForServer(url, child);
     await createWindow(url);
+    if (app.isPackaged) void autoUpdater.checkForUpdates().catch(() => undefined);
   } catch (error) {
     await stopServer();
     dialog.showErrorBox(

@@ -228,33 +228,29 @@ export default function Home() {
 }
 
 function SettingsView() {
-  const [status, setStatus] = useState('');
-  const [checking, setChecking] = useState(false);
+  const [status, setStatus] = useState('Checking GitHub for updates…');
   const [available, setAvailable] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
   useEffect(() => {
     const unsubscribe = window.fieldsteadDesktop?.onUpdateStatus((update) => {
-      if (update.event === 'update-downloaded') setStatus('Update downloaded. Restart to install it.');
+      if (update.event === 'update-available') { setAvailable(true); setStatus('A new Fieldstead update is available.'); }
+      if (update.event === 'update-not-available') setStatus('This program is up to date.');
+      if (update.event === 'update-downloaded') { setDownloaded(true); setStatus('Update downloaded. Restart to install it.'); }
       if (update.event === 'download-progress') setStatus('Downloading update…');
+      if (update.event === 'error') setStatus('GitHub update check is unavailable right now.');
     });
     return () => unsubscribe?.();
   }, []);
-  async function checkUpdates() {
-    setChecking(true);
-    const result = await window.fieldsteadDesktop?.checkForUpdates();
-    setChecking(false);
-    if (!result) { setStatus('Updates are available from the packaged desktop application.'); return; }
-    if (result.status === 'available') { setAvailable(true); setStatus(`Update ${result.version ?? ''} is available from GitHub.`); }
-    else if (result.status === 'current') setStatus('This is the latest GitHub release.');
-    else if (result.status === 'development') setStatus(result.message ?? 'Build the desktop package to check GitHub releases.');
-    else setStatus(result.message ?? 'GitHub update check failed.');
-  }
   async function download() {
     setStatus('Downloading update from GitHub…');
     await window.fieldsteadDesktop?.downloadUpdate();
   }
+  async function install() {
+    await window.fieldsteadDesktop?.installUpdate();
+  }
   return <div className="settings-page">
     <div className="activity-intro"><p className="eyebrow">SETTINGS</p><h2>Fieldstead Systems</h2><p>Local work stays on this device. Desktop updates come from the published Fieldstead Operations Starter release on GitHub.</p></div>
-    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">GITHUB UPDATES</p><h2>Keep this program current</h2></div><span className="pill pill-approved">GitHub</span></div><p className="settings-copy">Check for a new signed desktop release, download it, then restart when prompted. No GitHub credentials are stored in the app.</p><div className="header-actions"><button className="primary" onClick={() => void checkUpdates()} disabled={checking}>{checking ? 'Checking GitHub…' : 'Check for updates'}</button>{available && <button className="secondary" onClick={() => void download()}>Download update</button>}</div>{status && <p className="settings-status" role="status">{status}</p>}</section>
+    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">GITHUB UPDATES</p><h2>Keep this program current</h2></div><span className="pill pill-approved">GitHub</span></div><p className="settings-copy">Updates appear here only when a newer Fieldstead release has been published.</p>{(available || downloaded) && <div className="header-actions">{!downloaded && <button className="primary" onClick={() => void download()}>Download update</button>}{downloaded && <button className="primary" onClick={() => void install()}>Restart and install</button>}</div>}<p className="settings-status" role="status">{status}</p></section>
   </div>;
 }
 
