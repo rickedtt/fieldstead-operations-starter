@@ -14,7 +14,19 @@ import {
 } from '../lib/client-delivery';
 import { useFieldsteadLocalJobs } from './store/fieldstead-local';
 
-type View = 'Overview' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery';
+type View = 'Overview' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Settings';
+
+declare global {
+  interface Window {
+    fieldsteadDesktop?: {
+      desktop: boolean;
+      checkForUpdates: () => Promise<{ status: string; version?: string; message?: string }>;
+      downloadUpdate: () => Promise<{ status: string; message?: string }>;
+      installUpdate: () => Promise<{ status: string }>;
+      onUpdateStatus: (callback: (status: { event: string; detail?: unknown }) => void) => () => void;
+    };
+  }
+}
 
 const money = new Intl.NumberFormat('en-US', { style:'currency', currency:'USD', maximumFractionDigits:0 });
 const dateTime = new Intl.DateTimeFormat('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
@@ -168,7 +180,7 @@ export default function Home() {
         <div className="brand"><Image className="brand-logo" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/></div>
         <div className="prototype-signature"><Image src="/assets/fieldstead-systems-refined.svg" width={1600} height={520} alt="Fieldstead Systems" priority/><span>{PROTOTYPE_LABEL}</span></div>
         <nav aria-label="Main navigation">
-          {(['Overview','Jobs','Customers','Activity','Client Delivery'] as View[]).map((item) => (
+          {(['Overview','Jobs','Customers','Activity','Client Delivery','Settings'] as View[]).map((item) => (
             <button key={item} className={cx('nav-item', view === item && 'active')} onClick={() => setView(item)}>
               <span>{item}</span>{item === 'Jobs' && <b>{openJobs.length}</b>}
             </button>
@@ -193,10 +205,11 @@ export default function Home() {
           {view === 'Customers' && <CustomersView state={state} query={query} setQuery={setQuery} openCustomer={setSelectedCustomerId} newCustomer={() => setModal('customer')} />}
           {view === 'Activity' && <ActivityView state={state} openJob={setSelectedJobId} />}
           {view === 'Client Delivery' && <ClientDeliveryView state={state} applyImport={applyStagedImport} restore={restoreBackup} />}
+          {view === 'Settings' && <SettingsView />}
         </div>
 
         <nav className="mobile-nav" aria-label="Mobile navigation">
-          {(['Overview','Jobs','Customers','Activity','Client Delivery'] as View[]).map((item) => <button key={item} className={view === item ? 'active' : ''} onClick={() => setView(item)}><span aria-hidden="true">{item === 'Overview' ? '⌂' : item === 'Jobs' ? '□' : item === 'Customers' ? '◎' : item === 'Activity' ? '↻' : '⇄'}</span>{item === 'Client Delivery' ? 'Delivery' : item}</button>)}
+          {(['Overview','Jobs','Customers','Activity','Client Delivery','Settings'] as View[]).map((item) => <button key={item} className={view === item ? 'active' : ''} onClick={() => setView(item)}><span aria-hidden="true">{item === 'Overview' ? '⌂' : item === 'Jobs' ? '□' : item === 'Customers' ? '◎' : item === 'Activity' ? '↻' : '⇄'}</span>{item === 'Client Delivery' ? 'Delivery' : item}</button>)}
         </nav>
       </section>
 
@@ -207,6 +220,37 @@ export default function Home() {
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </main>
   );
+}
+
+function SettingsView() {
+  const [status, setStatus] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    const unsubscribe = window.fieldsteadDesktop?.onUpdateStatus((update) => {
+      if (update.event === 'update-downloaded') setStatus('Update downloaded. Restart to install it.');
+      if (update.event === 'download-progress') setStatus('Downloading update…');
+    });
+    return () => unsubscribe?.();
+  }, []);
+  async function checkUpdates() {
+    setChecking(true);
+    const result = await window.fieldsteadDesktop?.checkForUpdates();
+    setChecking(false);
+    if (!result) { setStatus('Updates are available from the packaged desktop application.'); return; }
+    if (result.status === 'available') { setAvailable(true); setStatus(`Update ${result.version ?? ''} is available from GitHub.`); }
+    else if (result.status === 'current') setStatus('This is the latest GitHub release.');
+    else if (result.status === 'development') setStatus(result.message ?? 'Build the desktop package to check GitHub releases.');
+    else setStatus(result.message ?? 'GitHub update check failed.');
+  }
+  async function download() {
+    setStatus('Downloading update from GitHub…');
+    await window.fieldsteadDesktop?.downloadUpdate();
+  }
+  return <div className="settings-page">
+    <div className="activity-intro"><p className="eyebrow">SETTINGS</p><h2>Fieldstead Systems</h2><p>Local work stays on this device. Desktop updates come from the published Fieldstead Operations Starter release on GitHub.</p></div>
+    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">GITHUB UPDATES</p><h2>Keep this program current</h2></div><span className="pill pill-approved">GitHub</span></div><p className="settings-copy">Check for a new signed desktop release, download it, then restart when prompted. No GitHub credentials are stored in the app.</p><div className="header-actions"><button className="primary" onClick={() => void checkUpdates()} disabled={checking}>{checking ? 'Checking GitHub…' : 'Check for updates'}</button>{available && <button className="secondary" onClick={() => void download()}>Download update</button>}</div>{status && <p className="settings-status" role="status">{status}</p>}</section>
+  </div>;
 }
 
 function Overview({ state, approvedPipeline, unpaid, attention, openJob, goToJobs }: { state:OperationsState; approvedPipeline:number; unpaid:number; attention:Job[]; openJob:(id:string)=>void; goToJobs:(filter?:string)=>void }) {

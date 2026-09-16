@@ -3,7 +3,7 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session, autoUpdater } from 'electron';
 import {
   isAllowedDesktopUrl,
   isAllowedNavigationUrl,
@@ -18,6 +18,38 @@ let mainWindow;
 let serverProcess;
 let shutdownStarted = false;
 let allowQuit = false;
+
+function publishUpdateStatus(status) {
+  mainWindow?.webContents.send('fieldstead-update-status', status);
+}
+
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+for (const event of ['checking-for-update', 'update-available', 'update-not-available', 'download-progress', 'update-downloaded', 'error']) {
+  autoUpdater.on(event, (...args) => publishUpdateStatus({ event, detail: args[0] ?? null }));
+}
+
+ipcMain.handle('fieldstead:check-for-updates', async () => {
+  if (!app.isPackaged) return { status: 'development', message: 'Updates are checked from the packaged GitHub release.' };
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    const available = result?.updateInfo?.version && result.updateInfo.version !== app.getVersion();
+    return { status: available ? 'available' : 'current', version: result?.updateInfo?.version ?? app.getVersion() };
+  } catch (error) {
+    return { status: 'error', message: error instanceof Error ? error.message : String(error) };
+  }
+});
+
+ipcMain.handle('fieldstead:download-update', async () => {
+  try { await autoUpdater.downloadUpdate(); return { status: 'downloading' }; }
+  catch (error) { return { status: 'error', message: error instanceof Error ? error.message : String(error) }; }
+});
+
+ipcMain.handle('fieldstead:install-update', () => {
+  allowQuit = true;
+  autoUpdater.quitAndInstall();
+  return { status: 'installing' };
+});
 
 function serverRoot() {
   return app.isPackaged
