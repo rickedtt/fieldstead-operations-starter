@@ -13,7 +13,7 @@ if not exist "node_modules" (
   if errorlevel 1 exit /b 1
 )
 
-echo Building the Golden Client Prototype...
+echo Building Fieldstead Systems Operations Starter...
 call npm run build
 if errorlevel 1 exit /b 1
 

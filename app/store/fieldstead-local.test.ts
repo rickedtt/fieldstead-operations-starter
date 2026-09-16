@@ -82,6 +82,35 @@ describe('LocalJobsStore', () => {
     store.stop();
   });
 
+  it('reopens the same IndexedDB database with the saved Fieldstead job intact', async () => {
+    const databaseName = `fieldstead-reopen-${crypto.randomUUID()}`;
+    const firstRepository = createFieldsteadRepository(databaseName);
+    repositories.push(firstRepository);
+    const firstStore = new LocalJobsStore({
+      fallbackJobs: [job({ id:'FS-DEMO-2000' })],
+      createRepository: () => firstRepository,
+      createOperationId: () => 'operation-reopen',
+      now: () => '2026-09-15T12:00:00.000Z',
+    });
+    await firstStore.start();
+    await waitFor(() => expect(firstStore.getSnapshot().loading).toBe(false));
+    await firstStore.mutateJob('FS-DEMO-2000', { status:'En route' });
+    firstStore.stop();
+    firstRepository.close();
+
+    const reopenedRepository = createFieldsteadRepository(databaseName);
+    repositories.push(reopenedRepository);
+    const reopenedStore = new LocalJobsStore({
+      fallbackJobs: [job({ id:'FS-DEMO-2000' })],
+      createRepository: () => reopenedRepository,
+    });
+    await reopenedStore.start();
+    await waitFor(() => expect(reopenedStore.getSnapshot().loading).toBe(false));
+
+    expect(reopenedStore.getSnapshot().jobs[0]).toMatchObject({ id:'FS-DEMO-2000', status:'En route' });
+    reopenedStore.stop();
+  });
+
   it('makes a job action visible immediately and creates a pending outbox operation', async () => {
     const { repository, store } = setup();
     await store.start();

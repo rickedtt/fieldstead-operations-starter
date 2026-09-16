@@ -6,7 +6,7 @@ import {
   parseOutboxOperation,
 } from './index';
 
-describe('Harbor & Pine job status rules', () => {
+describe('Fieldstead job status rules', () => {
   it('allows only supported forward and cancellation transitions', () => {
     expect(canTransitionJobStatus('Quoted', 'Scheduled')).toBe(true);
     expect(canTransitionJobStatus('Scheduled', 'En route')).toBe(true);

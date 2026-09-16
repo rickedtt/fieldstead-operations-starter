@@ -1,4 +1,4 @@
-# Harbor & Pine sync server
+# Fieldstead server boundary (not configured)
 
 `app/api/sync/route.ts` is a POST-only Vinext route. It reads `DB` and
 `JWT_SECRET` from `cloudflare:workers`, requires a Bearer token, and delegates

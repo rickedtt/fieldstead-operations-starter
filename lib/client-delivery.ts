@@ -1,6 +1,6 @@
 import type { Customer, Job, JobStatus, OperationsState } from './operations';
 
-export const PROTOTYPE_LABEL = 'Golden Client Prototype';
+export const PROTOTYPE_LABEL = 'Fieldstead Systems Operations Starter';
 export const WORKFLOW_STEPS = [
   'Lead',
   'Customer',
@@ -205,7 +205,7 @@ export function stageLegacyImport(
 }
 
 export type DemoBackup = {
-  kind: 'fieldstead-golden-client-demo-backup';
+  kind: 'fieldstead-operations-starter-dogfood-backup';
   version: 1;
   createdAt: string;
   syntheticOnly: true;
@@ -213,14 +213,14 @@ export type DemoBackup = {
 };
 
 export function createBackup(state: OperationsState, createdAt = new Date().toISOString()): DemoBackup {
-  return { kind: 'fieldstead-golden-client-demo-backup', version: 1, createdAt, syntheticOnly: true, state: structuredClone(state) };
+  return { kind: 'fieldstead-operations-starter-dogfood-backup', version: 1, createdAt, syntheticOnly: true, state: structuredClone(state) };
 }
 
 export function parseBackup(source: string): DemoBackup {
   const value: unknown = JSON.parse(source);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Backup must be a JSON object');
   const backup = value as Partial<DemoBackup>;
-  if (backup.kind !== 'fieldstead-golden-client-demo-backup' || backup.version !== 1 || backup.syntheticOnly !== true) {
+  if (backup.kind !== 'fieldstead-operations-starter-dogfood-backup' || backup.version !== 1 || backup.syntheticOnly !== true) {
     throw new TypeError('This is not a supported synthetic demo backup');
   }
   if (!backup.state || !Array.isArray(backup.state.customers) || !Array.isArray(backup.state.jobs) || !Array.isArray(backup.state.activity)) {

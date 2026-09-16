@@ -48,13 +48,15 @@ describe('synthetic backup contract', () => {
     const restored = parseBackup(JSON.stringify(backup));
 
     expect(restored.state).toEqual(seedState);
-    expect(restored.kind).toBe('fieldstead-golden-client-demo-backup');
+    expect(restored.kind).toBe('fieldstead-operations-starter-dogfood-backup');
+    expect(restored.syntheticOnly).toBe(true);
+    expect(restored.state.activity).toEqual(seedState.activity);
   });
 });
 
 describe('required prototype labels', () => {
   it('names the prototype and every delivery handoff', () => {
-    expect(PROTOTYPE_LABEL).toBe('Golden Client Prototype');
+    expect(PROTOTYPE_LABEL).toBe('Fieldstead Systems Operations Starter');
     expect(WORKFLOW_STEPS).toEqual([
       'Lead', 'Customer', 'Job', 'Completion', 'Invoice', 'Approval',
       'Payment reconciliation', 'Audit trail', 'Backup/Recovery',

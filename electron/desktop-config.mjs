@@ -1,5 +1,5 @@
-export const APP_ID = 'com.fieldstead.goldenclient.prototype';
-export const PRODUCT_NAME = 'Fieldstead Golden Client Prototype';
+export const APP_ID = 'com.fieldstead.operations.starter';
+export const PRODUCT_NAME = 'Fieldstead Systems Operations Starter';
 export const LOOPBACK_HOST = '127.0.0.1';
 export const PREFERRED_PORT = 43127;
 

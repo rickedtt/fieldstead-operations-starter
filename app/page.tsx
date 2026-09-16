@@ -134,7 +134,7 @@ export default function Home() {
     const activity: Activity = {
       id: `act-import-${Date.now()}`,
       at: importedAt,
-      actor: 'Jordan',
+      actor: 'Fieldstead owner',
       action: 'Legacy CSV import confirmed',
       detail: `${staged.counts.imported} synthetic jobs imported; ${staged.counts.skipped} rows skipped. Source IDs were preserved.`,
     };
@@ -165,7 +165,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark" aria-hidden="true">H</span><span>Harbor &amp; Pine<small>PROPERTY CARE</small></span></div>
+        <div className="brand"><span className="brand-mark" aria-hidden="true">F</span><span>Fieldstead Systems<small>OPERATIONS STARTER</small></span></div>
         <div className="prototype-signature"><Image src="/assets/fieldstead-systems-refined.svg" width={1600} height={520} alt="Fieldstead Systems" priority/><span>{PROTOTYPE_LABEL}</span></div>
         <nav aria-label="Main navigation">
           {(['Overview','Jobs','Customers','Activity','Client Delivery'] as View[]).map((item) => (
@@ -175,15 +175,17 @@ export default function Home() {
           ))}
         </nav>
         <div className={cx('local-note', localJobs.error && 'local-note-error')} title={localJobs.error?.message}><span aria-hidden="true">●</span><div><strong role="status">{localStatus}</strong><small>No cloud account required</small></div></div>
-        <div className="sidebar-foot"><span className="avatar">JL</span><span>Jordan Lee<small>OPERATIONS</small></span><button aria-label="Reset demo data" title="Reset demo data" onClick={resetDemo}>↻</button></div>
+        <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner<small>INTERNAL DOGFOOD</small></span><button aria-label="Reset demo data" title="Reset demo data" onClick={resetDemo}>↻</button></div>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
-          <button className="mobile-brand" aria-label="Go to overview" onClick={() => setView('Overview')}>H&amp;P</button>
-          <div><p className="eyebrow">HARBOR &amp; PINE · {PROTOTYPE_LABEL.toUpperCase()}</p><h1>{view === 'Overview' ? 'Good morning, Jordan.' : view}</h1><p className={cx('mobile-local-status', localJobs.error && 'failed')} role="status">{localStatus}</p></div>
+          <button className="mobile-brand" aria-label="Go to overview" onClick={() => setView('Overview')}>FS</button>
+          <div><p className="eyebrow">FIELDSTEAD SYSTEMS · LOCAL-FIRST DOGFOOD</p><h1>{view === 'Overview' ? 'Owner operations, at a glance.' : view}</h1><p className={cx('mobile-local-status', localJobs.error && 'failed')} role="status">{localStatus}</p></div>
           <div className="header-actions"><button className="migration-action" onClick={() => void migratePreviousData()}>Import previous local data</button><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></div>
         </header>
+
+        <div className="dogfood-banner" role="note"><strong>Fieldstead is using its own product.</strong><span>Synthetic demo data only · no customer messages, invoices, or payments are sent.</span></div>
 
         <div className="content">
           {view === 'Overview' && <Overview state={state} approvedPipeline={approvedPipeline} unpaid={unpaid} attention={needsAttention} openJob={(id) => setSelectedJobId(id)} goToJobs={goToJobs} />}
@@ -213,12 +215,12 @@ function Overview({ state, approvedPipeline, unpaid, attention, openJob, goToJob
   const overdue = state.jobs.filter((job) => job.invoiceStatus === 'Overdue').length;
   const unscheduled = state.jobs.filter((job) => job.quoteStatus === 'Approved' && !job.scheduledFor).length;
   return <>
-    <section className="value-strip"><div><span className="value-icon">✓</span><p><strong>Nothing gets lost after “yes.”</strong><br/>Quotes, field handoffs, and payment follow-up stay visible in one place.</p></div><span>Local demo · synthetic data</span></section>
+    <section className="value-strip"><div><span className="value-icon">✓</span><p><strong>Nothing gets lost after “yes.”</strong><br/>Estimates, owner handoffs, and payment follow-up stay visible in one place.</p></div><span>Dogfood · synthetic data</span></section>
     <section className="metric-grid" aria-label="Operations summary">
       <article><p>Open jobs</p><strong>{state.jobs.filter((job) => !['Completed','Canceled'].includes(job.status)).length}</strong><small>{unscheduled ? `${unscheduled} approved, not scheduled` : 'All approved work is scheduled'}</small></article>
       <article><p>Approved pipeline</p><strong>{money.format(approvedPipeline)}</strong><small>Scheduled and active work</small></article>
       <article><p>Awaiting payment</p><strong>{money.format(unpaid)}</strong><small>{overdue} overdue invoice</small></article>
-      <article><p>Quotes awaiting reply</p><strong>{quotes}</strong><small>Oldest sent 4 days ago</small></article>
+      <article><p>Estimates awaiting reply</p><strong>{quotes}</strong><small>Oldest marked sent 4 days ago</small></article>
     </section>
     <section className="attention-card">
       <div className="section-title"><div><p className="eyebrow">NEXT ACTIONS</p><h2>Keep work moving</h2></div><button className="text-button" onClick={() => goToJobs()}>View all jobs →</button></div>
@@ -239,7 +241,7 @@ function JobsView({ state, jobs, query, setQuery, filter, setFilter, openJob }: 
     <div className="result-count">{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'} <span>· click a row to manage the handoff</span></div>
     {jobs.length ? <div className="job-table" role="table" aria-label="Jobs">
       <div className="table-head" role="row"><span>Customer / job</span><span>Schedule</span><span>Status</span><span>Value</span><span>Next action</span></div>
-      {jobs.map((job) => { const customer = getCustomer(state,job); const action = nextAction(job); return <button role="row" className="table-row" key={job.id} onClick={() => openJob(job.id)}><span><strong>{customer.name}</strong><small>{job.service} · {job.id}</small></span><span><strong>{job.scheduledFor ? dateOnly.format(new Date(job.scheduledFor)) : 'Unscheduled'}</strong><small>{job.scheduledFor ? dateTime.format(new Date(job.scheduledFor)).split(', ').at(-1) : 'Set a date after approval'}</small></span><span><StatusPill>{job.status}</StatusPill><small>Quote: {job.quoteStatus}</small></span><span><strong>{money.format(job.quoteAmount)}</strong><small>Invoice: {job.invoiceStatus}</small></span><span className={cx('next-cell', action.priority === 'high' && 'urgent')}><strong>{action.label}</strong><small>{action.reason}</small></span></button>})}
+      {jobs.map((job) => { const customer = getCustomer(state,job); const action = nextAction(job); return <button role="row" className="table-row" key={job.id} onClick={() => openJob(job.id)}><span><strong>{customer.name}</strong><small>{job.service} · {job.id}</small></span><span><strong>{job.scheduledFor ? dateOnly.format(new Date(job.scheduledFor)) : 'Unscheduled'}</strong><small>{job.scheduledFor ? dateTime.format(new Date(job.scheduledFor)).split(', ').at(-1) : 'Set a date after approval'}</small></span><span><StatusPill>{job.status}</StatusPill><small>Estimate: {job.quoteStatus}</small></span><span><strong>{money.format(job.quoteAmount)}</strong><small>Invoice: {job.invoiceStatus}</small></span><span className={cx('next-cell', action.priority === 'high' && 'urgent')}><strong>{action.label}</strong><small>{action.reason}</small></span></button>})}
     </div> : <Empty title="No jobs found" detail="Try a broader search or clear the status filter."/>}
   </>;
 }
@@ -338,7 +340,7 @@ function ClientDeliveryView({ state, applyImport, restore }: { state:OperationsS
       <span className="demo-seal">LOCAL<br/>DEMO</span>
     </section>
 
-    <ol className="workflow-chain" aria-label="Golden client delivery workflow">
+    <ol className="workflow-chain" aria-label="Fieldstead dogfood delivery workflow">
       {WORKFLOW_STEPS.map((step, index) => <li key={step}><span>{String(index + 1).padStart(2, '0')}</span><strong>{step}</strong>{index < WORKFLOW_STEPS.length - 1 && <b aria-hidden="true">→</b>}</li>)}
     </ol>
 
@@ -388,7 +390,7 @@ function JobDrawer({ state, job, close, save }: { state:OperationsState; job:Job
     <div className="drawer-scroll">
       <section className="next-action"><p className="eyebrow">RECOMMENDED NEXT ACTION</p><div><span>→</span><div><strong>{action.label}</strong><p>{action.reason}</p></div></div>{nextStatus && <button onClick={() => save(advanceJob(state,job.id),`Job moved to ${nextStatus}`)}>Mark {nextStatus.toLowerCase()}</button>}</section>
       <section className="detail-section"><div className="detail-heading"><h3>Job</h3><StatusPill>{job.status}</StatusPill></div><h2>{job.service}</h2><p>{job.description || 'No work notes added.'}</p><div className="info-grid"><div><small>Customer</small><strong>{customer.name}</strong></div><div><small>Phone</small><strong>{customer.phone}</strong></div><div className="wide"><small>Property</small><strong>{customer.address}</strong></div></div></section>
-      <section className="detail-section"><div className="detail-heading"><h3>Quote / estimate</h3><strong>{money.format(job.quoteAmount)}</strong></div><div className="segmented" role="group" aria-label="Quote status">{(['Draft','Sent','Approved','Declined'] as QuoteStatus[]).map((status) => <button className={job.quoteStatus === status ? 'selected' : ''} key={status} onClick={() => save(setQuoteStatus(state,job.id,status),`Quote marked ${status.toLowerCase()}`)}>{status}</button>)}</div><p className="helper">Status changes are recorded only. This demo never sends real messages.</p></section>
+      <section className="detail-section"><div className="detail-heading"><h3>Estimate</h3><strong>{money.format(job.quoteAmount)}</strong></div><div className="segmented" role="group" aria-label="Estimate status">{(['Draft','Sent','Approved','Declined'] as QuoteStatus[]).map((status) => <button className={job.quoteStatus === status ? 'selected' : ''} key={status} onClick={() => save(setQuoteStatus(state,job.id,status),`Estimate marked ${status.toLowerCase()}`)}>{status}</button>)}</div><p className="helper">Status changes are recorded only. This dogfood app never sends real messages.</p></section>
       <section className="detail-section"><h3>Schedule &amp; handoff</h3><div className="form-grid"><label>Visit date and time<input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)}/></label><label>Crew<input value={crew} onChange={(event) => setCrew(event.target.value)} placeholder="Unassigned"/></label></div><button className="secondary full" onClick={() => save(updateJob(state,job.id,{ scheduledFor:scheduledFor ? new Date(scheduledFor).toISOString() : undefined, crew },'Schedule updated',`${formatWhen(scheduledFor ? new Date(scheduledFor).toISOString() : undefined)} · ${crew || 'Unassigned'}`),'Schedule saved')}>Save schedule</button></section>
       <section className="detail-section"><div className="detail-heading"><h3>Invoice &amp; payment</h3><strong>{money.format(job.invoiceAmount)}</strong></div><label className="select-label full-label">Invoice state<select value={job.invoiceStatus} onChange={(event) => save(setInvoiceStatus(state,job.id,event.target.value as InvoiceStatus),`Invoice marked ${event.target.value.toLowerCase()}`)}>{(['Not created','Draft','Sent','Paid','Overdue'] as InvoiceStatus[]).map((status) => <option key={status}>{status}</option>)}</select></label><p className="helper">This tracks bookkeeping state only. No invoice or payment is transmitted.</p></section>
       <section className="detail-section"><h3>Job activity</h3><div className="drawer-activity">{state.activity.filter((item) => item.jobId === job.id).map((item) => <div key={item.id}><span/><div><strong>{item.action}</strong><p>{item.detail}</p><small>{dateTime.format(new Date(item.at))} · {item.actor}</small></div></div>)}</div></section>
@@ -432,7 +434,7 @@ function NewJobModal({ state, close, save }: { state:OperationsState; close:()=>
   function submit(event: FormEvent) {
     event.preventDefault();
     const at = new Date().toISOString();
-    const resolvedCustomerId = customerMode === "new" ? "cus-" + Date["now"]() : customerId;
+    const resolvedCustomerId = customerMode === "new" ? "demo-fs-cus-" + Date["now"]() : customerId;
     const existing = state.customers.find((item) => item.id === resolvedCustomerId);
     const customer: Customer = { id: resolvedCustomerId, ...customerDraft, createdAt: existing?.createdAt || at };
     const customers = customerMode === "new" ? [customer, ...state.customers] : state.customers.map((item) => item.id === resolvedCustomerId ? { ...item, ...customerDraft } : item);
@@ -454,6 +456,6 @@ function NewJobModal({ state, close, save }: { state:OperationsState; close:()=>
 
 function NewCustomerModal({ state, close, save }: { state:OperationsState; close:()=>void; save:(next:OperationsState)=>void }) {
   const [form,setForm] = useState({ name:'', phone:'', email:'', address:'', notes:'' });
-  function submit(event:FormEvent) { event.preventDefault(); const at = new Date().toISOString(); const id = `cus-${Date.now()}`; const customer:Customer = { id, ...form, createdAt:at }; const activity:Activity = { id:`act-${Date.now()}`, at, customerId:id, actor:'Jordan', action:'Customer added', detail:`${form.name} was added to the customer list.` }; save({ ...state, customers:[customer,...state.customers], activity:[activity,...state.activity] }); }
+  function submit(event:FormEvent) { event.preventDefault(); const at = new Date().toISOString(); const id = `demo-fs-cus-${Date.now()}`; const customer:Customer = { id, ...form, createdAt:at }; const activity:Activity = { id:`act-${Date.now()}`, at, customerId:id, actor:'Fieldstead owner', action:'Customer added', detail:`${form.name} was added to the local customer list.` }; save({ ...state, customers:[customer,...state.customers], activity:[activity,...state.activity] }); }
   return <ModalShell title="Add a customer" close={close}><form onSubmit={submit} className="modal-form"><label>Full name<input required autoFocus value={form.name} onChange={(event) => setForm({...form,name:event.target.value})}/></label><div className="form-grid"><label>Phone<input required type="tel" value={form.phone} onChange={(event) => setForm({...form,phone:event.target.value})}/></label><label>Email<input required type="email" value={form.email} onChange={(event) => setForm({...form,email:event.target.value})}/></label></div><label>Service address<input required value={form.address} onChange={(event) => setForm({...form,address:event.target.value})}/></label><label>Property notes<textarea value={form.notes} onChange={(event) => setForm({...form,notes:event.target.value})} placeholder="Access details, preferences, and useful handoff notes"/></label><div className="modal-actions"><button type="button" className="secondary" onClick={close}>Cancel</button><button className="primary">Add customer</button></div></form></ModalShell>;
 }

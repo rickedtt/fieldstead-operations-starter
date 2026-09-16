@@ -3,14 +3,14 @@ import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('http://localhost:3000'),
-  title: 'Harbor & Pine Operations',
-  description: 'Every job, clearly handed off — a local-first job operations demo for Harbor & Pine Property Care.',
+  title: 'Fieldstead Systems Operations Starter',
+  description: 'Fieldstead Systems dogfooding its local-first operations starter with synthetic demo data.',
   openGraph: {
-    title: 'Harbor & Pine Operations',
-    description: 'Every job, clearly handed off.',
-    images: [{ url:'/og.png', width:1731, height:909, alt:'Harbor & Pine Operations — Every job, clearly handed off.' }],
+    title: 'Fieldstead Systems Operations Starter',
+    description: 'Fieldstead using its own local-first operations product with synthetic data.',
+    images: [{ url:'/og.png', width:1731, height:909, alt:'Fieldstead Systems Operations Starter — internal dogfood demo.' }],
   },
-  twitter: { card:'summary_large_image', title:'Harbor & Pine Operations', description:'Every job, clearly handed off.', images:['/og.png'] },
+  twitter: { card:'summary_large_image', title:'Fieldstead Systems Operations Starter', description:'Internal dogfood demo with synthetic data.', images:['/og.png'] },
 };
 
 export default function RootLayout({

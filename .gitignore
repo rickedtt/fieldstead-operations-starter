@@ -1,0 +1,7 @@
+node_modules/
+.next/
+dist/
+release/
+.wrangler/
+next-env.d.ts
+*.tgz

@@ -23,33 +23,35 @@ export type Activity = {
 export type OperationsState = { customers: Customer[]; jobs: Job[]; activity: Activity[] };
 
 const now = '2026-08-30T09:00:00-05:00';
+const ownerActor = 'Fieldstead owner';
+const demoNote = 'Synthetic dogfood record — not a real customer.';
 
 export const seedState: OperationsState = {
   customers: [
-    { id:'cus-maya', name:'Maya Thompson', phone:'(312) 555-0148', email:'maya.thompson@example.com', address:'1842 W Berteau Ave, Chicago, IL', notes:'Side gate sticks; text on arrival.', createdAt:'2026-07-12T10:00:00-05:00' },
-    { id:'cus-daniel', name:'Daniel Cho', phone:'(773) 555-0181', email:'daniel.cho@example.com', address:'4108 N Lincoln Ave, Chicago, IL', notes:'Water hookup is behind garage.', createdAt:'2026-07-22T14:30:00-05:00' },
-    { id:'cus-priya', name:'Priya Shah', phone:'(312) 555-0174', email:'priya.shah@example.com', address:'2231 W Roscoe St, Chicago, IL', notes:'Dog in yard; call before opening gate.', createdAt:'2026-08-03T09:15:00-05:00' },
-    { id:'cus-elena', name:'Elena Ramirez', phone:'(773) 555-0129', email:'elena.ramirez@example.com', address:'1520 N Campbell Ave, Chicago, IL', notes:'Prefers email for paperwork.', createdAt:'2026-06-18T11:00:00-05:00' },
-    { id:'cus-ben', name:'Ben Carter', phone:'(872) 555-0190', email:'ben.carter@example.com', address:'3701 N Hoyne Ave, Chicago, IL', notes:'Corner property; alley access.', createdAt:'2026-08-20T16:00:00-05:00' },
-    { id:'cus-aisha', name:'Aisha Morgan', phone:'(312) 555-0116', email:'aisha.morgan@example.com', address:'2619 W Montrose Ave, Chicago, IL', notes:'Quote includes detached garage.', createdAt:'2026-08-26T13:45:00-05:00' },
+    { id:'demo-fs-cus-northstar', name:'Northstar Bicycle Repair (Demo)', phone:'(312) 555-0101', email:'northstar@example.com', address:'100 Demo Way, Chicago, IL', notes:`${demoNote} Owner prefers a concise weekly operations summary.`, createdAt:'2026-07-12T10:00:00-05:00' },
+    { id:'demo-fs-cus-hearth', name:'Hearth & Hammer Workshop (Demo)', phone:'(312) 555-0102', email:'hearth@example.com', address:'200 Sample Street, Chicago, IL', notes:`${demoNote} Use the side entrance for the workflow rehearsal.`, createdAt:'2026-07-22T14:30:00-05:00' },
+    { id:'demo-fs-cus-lakeside', name:'Lakeside Garden Studio (Demo)', phone:'(312) 555-0103', email:'lakeside@example.com', address:'300 Example Avenue, Chicago, IL', notes:`${demoNote} Confirmation is recorded locally; no message is sent.`, createdAt:'2026-08-03T09:15:00-05:00' },
+    { id:'demo-fs-cus-ember', name:'Ember Home Services (Demo)', phone:'(312) 555-0104', email:'ember@example.com', address:'400 Fictional Road, Chicago, IL', notes:`${demoNote} Bookkeeping states are for rehearsal only.`, createdAt:'2026-06-18T11:00:00-05:00' },
+    { id:'demo-fs-cus-copper', name:'Copper Finch Creative (Demo)', phone:'(312) 555-0105', email:'copper@example.com', address:'500 Placeholder Place, Chicago, IL', notes:`${demoNote} Follow-up copy must stay in no-send mode.`, createdAt:'2026-08-20T16:00:00-05:00' },
+    { id:'demo-fs-cus-maple', name:'Maple Street Mercantile (Demo)', phone:'(312) 555-0106', email:'maple@example.com', address:'600 Test Lane, Chicago, IL', notes:`${demoNote} Demonstration scope includes a second location.`, createdAt:'2026-08-26T13:45:00-05:00' },
   ],
   jobs: [
-    { id:'HP-1048', customerId:'cus-maya', service:'Gutter clean + guards', description:'Clean all gutters and install guards on rear elevation.', quoteStatus:'Approved', quoteAmount:620, quoteSentAt:'2026-08-22T10:00:00-05:00', scheduledFor:'2026-08-30T08:30:00-05:00', durationHours:2, crew:'Luis + Sam', status:'Scheduled', invoiceStatus:'Not created', invoiceAmount:620, createdAt:'2026-08-20T14:00:00-05:00', updatedAt:'2026-08-28T16:10:00-05:00' },
-    { id:'HP-1049', customerId:'cus-daniel', service:'House wash', description:'Two-story soft wash; protect garden beds.', quoteStatus:'Approved', quoteAmount:480, quoteSentAt:'2026-08-21T15:20:00-05:00', scheduledFor:'2026-08-30T11:00:00-05:00', durationHours:2.5, crew:'Luis + Sam', status:'En route', invoiceStatus:'Draft', invoiceAmount:480, createdAt:'2026-08-19T09:30:00-05:00', updatedAt:now },
-    { id:'HP-1050', customerId:'cus-priya', service:'Deck soft wash', description:'Cedar deck and stair rails; low pressure only.', quoteStatus:'Approved', quoteAmount:350, quoteSentAt:'2026-08-24T09:00:00-05:00', scheduledFor:'2026-08-31T14:30:00-05:00', durationHours:2, crew:'Nora', status:'Scheduled', invoiceStatus:'Not created', invoiceAmount:350, createdAt:'2026-08-23T11:20:00-05:00', updatedAt:'2026-08-29T12:00:00-05:00' },
-    { id:'HP-1044', customerId:'cus-elena', service:'Driveway pressure wash', description:'Driveway and front walk.', quoteStatus:'Approved', quoteAmount:380, quoteSentAt:'2026-08-10T13:00:00-05:00', scheduledFor:'2026-08-20T09:00:00-05:00', durationHours:2, crew:'Nora', status:'Completed', invoiceStatus:'Overdue', invoiceAmount:380, invoiceDueAt:'2026-08-24T23:59:00-05:00', createdAt:'2026-08-08T10:00:00-05:00', updatedAt:'2026-08-24T08:00:00-05:00' },
-    { id:'HP-1051', customerId:'cus-ben', service:'Gutter cleaning', description:'Clean gutters and downspouts; photo report.', quoteStatus:'Sent', quoteAmount:290, quoteSentAt:'2026-08-26T15:00:00-05:00', durationHours:1.5, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:290, createdAt:'2026-08-26T14:30:00-05:00', updatedAt:'2026-08-26T15:00:00-05:00' },
-    { id:'HP-1052', customerId:'cus-aisha', service:'House + garage wash', description:'Brick home soft wash plus detached garage.', quoteStatus:'Sent', quoteAmount:760, quoteSentAt:'2026-08-28T10:30:00-05:00', durationHours:4, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:760, createdAt:'2026-08-28T09:00:00-05:00', updatedAt:'2026-08-28T10:30:00-05:00' },
-    { id:'HP-1046', customerId:'cus-maya', service:'Patio wash', description:'Rear paver patio and furniture rinse.', quoteStatus:'Approved', quoteAmount:240, quoteSentAt:'2026-08-12T11:00:00-05:00', scheduledFor:'2026-08-18T10:00:00-05:00', durationHours:1.5, crew:'Luis', status:'Completed', invoiceStatus:'Paid', invoiceAmount:240, invoiceDueAt:'2026-08-25T23:59:00-05:00', paidAt:'2026-08-19T13:00:00-05:00', createdAt:'2026-08-11T12:00:00-05:00', updatedAt:'2026-08-19T13:00:00-05:00' },
-    { id:'HP-1053', customerId:'cus-elena', service:'Fall gutter service', description:'Seasonal gutter service; verify date.', quoteStatus:'Draft', quoteAmount:310, durationHours:2, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:310, createdAt:'2026-08-29T15:00:00-05:00', updatedAt:'2026-08-29T15:00:00-05:00' },
+    { id:'FS-DEMO-1048', customerId:'demo-fs-cus-northstar', service:'Operations workflow setup', description:'Configure a synthetic estimate-to-schedule workflow and owner handoff.', quoteStatus:'Approved', quoteAmount:620, quoteSentAt:'2026-08-22T10:00:00-05:00', scheduledFor:'2026-08-30T08:30:00-05:00', durationHours:2, crew:'Fieldstead owner', status:'Scheduled', invoiceStatus:'Not created', invoiceAmount:620, createdAt:'2026-08-20T14:00:00-05:00', updatedAt:'2026-08-28T16:10:00-05:00' },
+    { id:'FS-DEMO-1049', customerId:'demo-fs-cus-hearth', service:'Local data migration rehearsal', description:'Validate a synthetic import and document the recovery checkpoint.', quoteStatus:'Approved', quoteAmount:480, quoteSentAt:'2026-08-21T15:20:00-05:00', scheduledFor:'2026-08-30T11:00:00-05:00', durationHours:2.5, crew:'Fieldstead owner', status:'En route', invoiceStatus:'Draft', invoiceAmount:480, createdAt:'2026-08-19T09:30:00-05:00', updatedAt:now },
+    { id:'FS-DEMO-1050', customerId:'demo-fs-cus-lakeside', service:'Owner dashboard configuration', description:'Review schedule visibility, next actions, and local-only activity.', quoteStatus:'Approved', quoteAmount:350, quoteSentAt:'2026-08-24T09:00:00-05:00', scheduledFor:'2026-08-31T14:30:00-05:00', durationHours:2, crew:'Fieldstead owner', status:'Scheduled', invoiceStatus:'Not created', invoiceAmount:350, createdAt:'2026-08-23T11:20:00-05:00', updatedAt:'2026-08-29T12:00:00-05:00' },
+    { id:'FS-DEMO-1044', customerId:'demo-fs-cus-ember', service:'Invoice follow-up rehearsal', description:'Exercise overdue visibility without sending an invoice or collecting money.', quoteStatus:'Approved', quoteAmount:380, quoteSentAt:'2026-08-10T13:00:00-05:00', scheduledFor:'2026-08-20T09:00:00-05:00', durationHours:2, crew:'Fieldstead owner', status:'Completed', invoiceStatus:'Overdue', invoiceAmount:380, invoiceDueAt:'2026-08-24T23:59:00-05:00', createdAt:'2026-08-08T10:00:00-05:00', updatedAt:'2026-08-24T08:00:00-05:00' },
+    { id:'FS-DEMO-1051', customerId:'demo-fs-cus-copper', service:'Estimate follow-up workflow', description:'Review a pending synthetic estimate and record the owner decision.', quoteStatus:'Sent', quoteAmount:290, quoteSentAt:'2026-08-26T15:00:00-05:00', durationHours:1.5, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:290, createdAt:'2026-08-26T14:30:00-05:00', updatedAt:'2026-08-26T15:00:00-05:00' },
+    { id:'FS-DEMO-1052', customerId:'demo-fs-cus-maple', service:'Two-location workflow design', description:'Synthetic discovery and handoff plan for two demonstration locations.', quoteStatus:'Sent', quoteAmount:760, quoteSentAt:'2026-08-28T10:30:00-05:00', durationHours:4, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:760, createdAt:'2026-08-28T09:00:00-05:00', updatedAt:'2026-08-28T10:30:00-05:00' },
+    { id:'FS-DEMO-1046', customerId:'demo-fs-cus-northstar', service:'Backup recovery check', description:'Export and restore a synthetic local operations backup.', quoteStatus:'Approved', quoteAmount:240, quoteSentAt:'2026-08-12T11:00:00-05:00', scheduledFor:'2026-08-18T10:00:00-05:00', durationHours:1.5, crew:'Fieldstead owner', status:'Completed', invoiceStatus:'Paid', invoiceAmount:240, invoiceDueAt:'2026-08-25T23:59:00-05:00', paidAt:'2026-08-19T13:00:00-05:00', createdAt:'2026-08-11T12:00:00-05:00', updatedAt:'2026-08-19T13:00:00-05:00' },
+    { id:'FS-DEMO-1053', customerId:'demo-fs-cus-ember', service:'Quarterly operations review', description:'Draft a synthetic next-phase operations review.', quoteStatus:'Draft', quoteAmount:310, durationHours:2, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:310, createdAt:'2026-08-29T15:00:00-05:00', updatedAt:'2026-08-29T15:00:00-05:00' },
   ],
   activity: [
-    { id:'act-1', at:now, jobId:'HP-1049', customerId:'cus-daniel', actor:'Jordan', action:'Job moved to En route', detail:'Luis + Sam are heading to the property.' },
-    { id:'act-2', at:'2026-08-29T16:40:00-05:00', jobId:'HP-1050', customerId:'cus-priya', actor:'Jordan', action:'Schedule updated', detail:'Moved to Monday at 2:30 PM; confirmation still needed.' },
-    { id:'act-3', at:'2026-08-29T15:00:00-05:00', jobId:'HP-1053', customerId:'cus-elena', actor:'Jordan', action:'Quote drafted', detail:'Fall gutter service estimate created for $310.' },
-    { id:'act-4', at:'2026-08-28T10:30:00-05:00', jobId:'HP-1052', customerId:'cus-aisha', actor:'Jordan', action:'Quote sent', detail:'Estimate for $760 marked sent (demo only; no message delivered).' },
-    { id:'act-5', at:'2026-08-26T15:00:00-05:00', jobId:'HP-1051', customerId:'cus-ben', actor:'Jordan', action:'Quote sent', detail:'Estimate for $290 marked sent (demo only; no message delivered).' },
-    { id:'act-6', at:'2026-08-24T08:00:00-05:00', jobId:'HP-1044', customerId:'cus-elena', actor:'System', action:'Invoice became overdue', detail:'Invoice balance of $380 remains unpaid.' },
+    { id:'demo-fs-act-1', at:now, jobId:'FS-DEMO-1049', customerId:'demo-fs-cus-hearth', actor:ownerActor, action:'Job moved to En route', detail:'The synthetic migration rehearsal is ready for the owner review.' },
+    { id:'demo-fs-act-2', at:'2026-08-29T16:40:00-05:00', jobId:'FS-DEMO-1050', customerId:'demo-fs-cus-lakeside', actor:ownerActor, action:'Schedule updated', detail:'Moved to Monday at 2:30 PM; this did not send a confirmation.' },
+    { id:'demo-fs-act-3', at:'2026-08-29T15:00:00-05:00', jobId:'FS-DEMO-1053', customerId:'demo-fs-cus-ember', actor:ownerActor, action:'Estimate drafted', detail:'Synthetic operations review estimate created for $310.' },
+    { id:'demo-fs-act-4', at:'2026-08-28T10:30:00-05:00', jobId:'FS-DEMO-1052', customerId:'demo-fs-cus-maple', actor:ownerActor, action:'Estimate marked sent', detail:'Estimate for $760 marked sent (demo only; no message delivered).' },
+    { id:'demo-fs-act-5', at:'2026-08-26T15:00:00-05:00', jobId:'FS-DEMO-1051', customerId:'demo-fs-cus-copper', actor:ownerActor, action:'Estimate marked sent', detail:'Estimate for $290 marked sent (demo only; no message delivered).' },
+    { id:'demo-fs-act-6', at:'2026-08-24T08:00:00-05:00', jobId:'FS-DEMO-1044', customerId:'demo-fs-cus-ember', actor:'Demo system', action:'Invoice became overdue', detail:'Synthetic invoice balance of $380 remains unpaid.' },
   ],
 };
 
@@ -76,7 +78,7 @@ export function updateJob(state: OperationsState, jobId: string, changes: Partia
   return {
     ...state,
     jobs: state.jobs.map((item) => item.id === jobId ? job : item),
-    activity: [{ id:`act-${Date.now()}-${state.activity.length}`, at, jobId, customerId:current.customerId, actor:'Jordan', action, detail }, ...state.activity],
+    activity: [{ id:`act-${Date.now()}-${state.activity.length}`, at, jobId, customerId:current.customerId, actor:ownerActor, action, detail }, ...state.activity],
   };
 }
 
@@ -93,7 +95,7 @@ export function setQuoteStatus(state: OperationsState, jobId: string, quoteStatu
   const changes: Partial<Job> = { quoteStatus };
   if (quoteStatus === 'Sent') changes.quoteSentAt = at;
   if (quoteStatus === 'Approved') changes.status = 'Scheduled';
-  return updateJob(state, jobId, changes, `Quote ${quoteStatus.toLowerCase()}`, `Estimate status changed to ${quoteStatus}.`, at);
+  return updateJob(state, jobId, changes, `Estimate ${quoteStatus.toLowerCase()}`, `Estimate status changed to ${quoteStatus}. No message was sent.`, at);
 }
 
 export function setInvoiceStatus(state: OperationsState, jobId: string, invoiceStatus: InvoiceStatus, at = new Date().toISOString()): OperationsState {
@@ -101,9 +103,9 @@ export function setInvoiceStatus(state: OperationsState, jobId: string, invoiceS
 }
 
 export function createJob(state: OperationsState, input: { customerId:string; service:string; quoteAmount:number; scheduledFor?:string; description?:string }, at = new Date().toISOString()): OperationsState {
-  const maxNumber = Math.max(...state.jobs.map((job) => Number(job.id.split('-')[1]) || 1000));
-  const job: Job = { id:`HP-${maxNumber + 1}`, customerId:input.customerId, service:input.service, description:input.description || '', quoteStatus:'Draft', quoteAmount:input.quoteAmount, scheduledFor:input.scheduledFor, durationHours:2, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:input.quoteAmount, createdAt:at, updatedAt:at };
-  return { ...state, jobs:[job, ...state.jobs], activity:[{ id:`act-${Date.now()}-${state.activity.length}`, at, jobId:job.id, customerId:job.customerId, actor:'Jordan', action:'Job created', detail:`${job.service} added with a $${job.quoteAmount} draft estimate.` }, ...state.activity] };
+  const maxNumber = Math.max(...state.jobs.map((job) => Number(job.id.split('-').at(-1)) || 1000));
+  const job: Job = { id:`FS-DEMO-${maxNumber + 1}`, customerId:input.customerId, service:input.service, description:input.description || '', quoteStatus:'Draft', quoteAmount:input.quoteAmount, scheduledFor:input.scheduledFor, durationHours:2, crew:'Unassigned', status:'Quoted', invoiceStatus:'Not created', invoiceAmount:input.quoteAmount, createdAt:at, updatedAt:at };
+  return { ...state, jobs:[job, ...state.jobs], activity:[{ id:`act-${Date.now()}-${state.activity.length}`, at, jobId:job.id, customerId:job.customerId, actor:ownerActor, action:'Job created', detail:`${job.service} added with a $${job.quoteAmount} draft estimate.` }, ...state.activity] };
 }
 
 export function searchJobs(state: OperationsState, query: string, status = 'All') {

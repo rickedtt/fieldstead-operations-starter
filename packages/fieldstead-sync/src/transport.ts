@@ -11,7 +11,7 @@ import {
 } from './index';
 
 /**
- * Boundary implemented later by an authenticated Harbor & Pine server route.
+ * Boundary implemented later only by an explicitly configured Fieldstead server route.
  * This package intentionally provides no network endpoint or persistence.
  */
 export interface SyncTransport {

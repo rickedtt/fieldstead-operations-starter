@@ -13,7 +13,7 @@ import {
 } from '../../packages/fieldstead-local-store/src/migration';
 
 export const FIELDSTEAD_DATABASE_NAME =
-  'fieldstead-harbor-pine-operations-v1';
+  'fieldstead-operations-starter-dogfood-v1';
 
 export type LocalJobsSnapshot = {
   jobs: Job[];

@@ -1,7 +1,7 @@
 # Fieldstead sync architecture
 
 `fieldstead-sync` defines the browser/server-neutral contract for sending local
-outbox operations to Harbor & Pine. It contains no React, browser storage,
+outbox operations to a possible future Fieldstead server. It contains no React, browser storage,
 database, or server framework imports.
 
 ## Protocol boundary
@@ -20,7 +20,7 @@ identical retry. Reusing an ID for different content must be rejected with
 `idempotency_key_reused`. Batch IDs are for tracing and do not replace
 operation-level idempotency.
 
-`SyncTransport` is the typed Harbor & Pine API boundary. The included
+`SyncTransport` is a typed, inactive future API boundary. The included
 `InMemorySyncTransport` is only a deterministic test double for client and
 contract tests. It has disposable process-local state and is never selected as
 a production fallback. The production boundary is the authenticated Workers

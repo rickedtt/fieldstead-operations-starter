@@ -1,7 +1,7 @@
 # Fieldstead packages
 
-These packages are the first local-first slice. They are not wired into the
-existing Harbor & Pine UI yet.
+These packages support the local-first Fieldstead Systems Operations Starter
+dogfood application.
 
 ## `fieldstead-domain`
 
@@ -9,7 +9,7 @@ existing Harbor & Pine UI yet.
 `JobAssignment`, `ActivityEvent`, and `OutboxOperation` types. It also exports:
 
 - `JOB_STATUS_TRANSITIONS` and `canTransitionJobStatus` for the supported
-  Harbor & Pine workflow.
+  Fieldstead operations workflow.
 - `CAPABILITIES` and `ROLE_CAPABILITIES` for `owner_admin`, `dispatcher`, and
   `field_crew`.
 - `parseJob`, `parseJobAssignment`, `parseActivityEvent`, and
@@ -29,7 +29,7 @@ update, its pending outbox operation, and an optional activity event. Callers
 must supply a globally unique `operationId`; a duplicate rejects the entire
 transaction, so the local job is not partially updated.
 
-Legacy import is deliberately separate and opt-in:
+The Harbor & Pine compatibility import is deliberately separate and opt-in:
 
 ```ts
 await importHarborPineOperationsV1(repository, window.localStorage);

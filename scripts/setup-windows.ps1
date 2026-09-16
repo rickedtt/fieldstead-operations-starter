@@ -22,4 +22,4 @@ Write-Host "Installing lockfile-pinned dependencies for the local synthetic demo
 npm ci
 if ($LASTEXITCODE -ne 0) { throw "npm ci failed." }
 
-Write-Host "Setup complete. Run scripts\run-windows.bat to build and start the prototype."
+Write-Host "Setup complete. Run scripts\run-windows.bat to build and start the dogfood app."
