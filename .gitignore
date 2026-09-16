@@ -5,3 +5,4 @@ release/
 .wrangler/
 next-env.d.ts
 *.tgz
+.vinext/
