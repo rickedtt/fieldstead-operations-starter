@@ -120,6 +120,19 @@ export default function Home() {
       setToast(error instanceof Error ? `Could not save ${id}: ${error.message}` : `Could not save ${id}`);
     });
   }
+  function removeCustomer(customerId: string) {
+    const customer = state.customers.find((item) => item.id === customerId);
+    if (!customer || !window.confirm(`Remove ${customer.name} and its ${state.jobs.filter((job) => job.customerId === customerId).length} related job(s) from this local workspace?`)) return;
+    const next = {
+      customers: state.customers.filter((item) => item.id !== customerId),
+      jobs: state.jobs.filter((job) => job.customerId !== customerId),
+      activity: state.activity.filter((item) => item.customerId !== customerId),
+    };
+    setUiState(next);
+    setSelectedCustomerId(undefined);
+    setToast(`${customer.name} removed`);
+    void localJobs.replaceDemoJobs(next.jobs).catch(() => setToast('Customer removed from view, but local job cleanup failed'));
+  }
   function resetDemo() {
     if (window.confirm('Clear all local Fieldstead records and restore the empty starting workspace?')) {
       setUiState(structuredClone(seedState));
@@ -214,7 +227,7 @@ export default function Home() {
       </section>
 
       {selectedJob && <JobDrawer state={state} job={selectedJob} close={() => setSelectedJobId(undefined)} save={(next,message) => mutate(next,message)} />}
-      {selectedCustomer && <CustomerDrawer state={state} customer={selectedCustomer} close={() => setSelectedCustomerId(undefined)} openJob={(id) => { setSelectedCustomerId(undefined); setSelectedJobId(id); }} />}
+      {selectedCustomer && <CustomerDrawer state={state} customer={selectedCustomer} close={() => setSelectedCustomerId(undefined)} openJob={(id) => { setSelectedCustomerId(undefined); setSelectedJobId(id); }} remove={() => removeCustomer(selectedCustomer.id)} />}
       {modal === 'job' && <NewJobModal state={state} close={() => setModal(null)} save={saveNewJob} />}
       {modal === 'customer' && <NewCustomerModal state={state} close={() => setModal(null)} save={(next) => { mutate(next,'Customer added'); setModal(null); }} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
@@ -442,9 +455,9 @@ function JobDrawer({ state, job, close, save }: { state:OperationsState; job:Job
   </DrawerShell>;
 }
 
-function CustomerDrawer({ state, customer, close, openJob }: { state:OperationsState; customer:Customer; close:()=>void; openJob:(id:string)=>void }) {
+function CustomerDrawer({ state, customer, close, openJob, remove }: { state:OperationsState; customer:Customer; close:()=>void; openJob:(id:string)=>void; remove:()=>void }) {
   const jobs = state.jobs.filter((job) => job.customerId === customer.id);
-  return <DrawerShell title={customer.name} subtitle="CUSTOMER RECORD" close={close}><div className="drawer-scroll"><section className="detail-section contact-card"><div className="customer-initials large">{customer.name.split(' ').map((part) => part[0]).join('')}</div><div><a href={`tel:${customer.phone}`}>{customer.phone}</a><a href={`mailto:${customer.email}`}>{customer.email}</a><p>{customer.address}</p></div></section><section className="detail-section"><h3>Property notes</h3><p>{customer.notes || 'No property notes.'}</p></section><section className="detail-section"><div className="detail-heading"><h3>Job history</h3><strong>{jobs.length} jobs</strong></div><div className="compact-jobs">{jobs.map((job) => <button key={job.id} onClick={() => openJob(job.id)}><span><strong>{job.service}</strong><small>{job.id} · {formatWhen(job.scheduledFor)}</small></span><span><StatusPill>{job.status}</StatusPill><b>{money.format(job.quoteAmount)} →</b></span></button>)}</div></section></div></DrawerShell>;
+  return <DrawerShell title={customer.name} subtitle="CUSTOMER RECORD" close={close}><div className="drawer-scroll"><section className="detail-section contact-card"><div className="customer-initials large">{customer.name.split(' ').map((part) => part[0]).join('')}</div><div><a href={`tel:${customer.phone}`}>{customer.phone}</a><a href={`mailto:${customer.email}`}>{customer.email}</a><p>{customer.address}</p></div></section><section className="detail-section"><h3>Property notes</h3><p>{customer.notes || 'No property notes.'}</p></section><section className="detail-section"><div className="detail-heading"><h3>Job history</h3><strong>{jobs.length} jobs</strong></div><div className="compact-jobs">{jobs.map((job) => <button key={job.id} onClick={() => openJob(job.id)}><span><strong>{job.service}</strong><small>{job.id} · {formatWhen(job.scheduledFor)}</small></span><span><StatusPill>{job.status}</StatusPill><b>{money.format(job.quoteAmount)} →</b></span></button>)}</div></section><section className="detail-section danger-zone"><h3>Remove customer</h3><p>This removes the customer and related local jobs from this workspace.</p><button className="danger" onClick={remove}>Remove customer</button></section></div></DrawerShell>;
 }
 
 function ModalShell({ title, close, children }: { title:string; close:()=>void; children:React.ReactNode }) { return <div className="overlay modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><section className="modal" role="dialog" aria-modal="true" aria-label={title}><header><div><p className="eyebrow">QUICK ADD</p><h2>{title}</h2></div><button className="close" aria-label="Close" onClick={close}>×</button></header>{children}</section></div>; }

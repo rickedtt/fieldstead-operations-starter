@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { advanceJob, createJob, nextAction, searchJobs, seedState, syntheticDemoState, setInvoiceStatus, setQuoteStatus, updateJob } from './operations';
 
-describe('Fieldstead dogfood seed identity', () => {
-  it('opens with Fieldstead identity only and no invented operational records', () => {
-    expect(seedState.customers).toHaveLength(1);
-    expect(seedState.customers[0]).toMatchObject({ id:'fieldstead-internal', name:'Fieldstead Systems' });
+describe('Fieldstead live workspace seed', () => {
+  it('opens with no customer records or invented operational records', () => {
+    expect(seedState.customers).toEqual([]);
     expect(seedState.jobs).toEqual([]);
     expect(seedState.activity).toEqual([]);
   });

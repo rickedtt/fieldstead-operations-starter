@@ -56,15 +56,7 @@ export const syntheticDemoState: OperationsState = {
 };
 
 export const seedState: OperationsState = {
-  customers: [{
-    id: 'fieldstead-internal',
-    name: 'Fieldstead Systems',
-    phone: '',
-    email: '',
-    address: '',
-    notes: 'Internal Fieldstead dogfood workspace. Enter only confirmed business information; no fictional customer records are preloaded.',
-    createdAt: '2026-09-15T00:00:00-05:00',
-  }],
+  customers: [],
   jobs: [],
   activity: [],
 };
