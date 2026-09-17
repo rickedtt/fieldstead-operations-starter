@@ -112,3 +112,17 @@
   .desktop-only{display:none}
   .content{width:calc(100% - 28px);padding:22px 0 50px}
 }
+
+/* Complete dark-mode surface audit across every tab and drawer. */
+.theme-dark .nav-item b,.theme-dark .customer-initials{background:#294532;color:#cfe4bf}
+.theme-dark .route-list>button:hover,.theme-dark .table-row:hover{background:#20352b}
+.theme-dark .table-head,.theme-dark .segmented{background:#202d27;color:var(--muted);border-color:var(--line)}
+.theme-dark .search,.theme-dark .select-label select,.theme-dark .mapping-grid select,.theme-dark .detail-section input,.theme-dark .modal-form input,.theme-dark .modal-form select,.theme-dark .modal-form textarea,.theme-dark .full-label select{background:#111b17;color:var(--ink);border-color:var(--line)}
+.theme-dark .drawer>header,.theme-dark .modal>header,.theme-dark .next-action,.theme-dark .detail-section{background:var(--card);color:var(--ink);border-color:var(--line)}
+.theme-dark .close{background:#23322c;color:var(--ink);border-color:var(--line)}
+.theme-dark .next-action{background:#20352b;border-color:#416158}
+.theme-dark .activity-intro{background:#20352b;color:var(--ink);border-color:var(--line)}
+.theme-dark .activity-intro>p:last-child{color:var(--muted)}
+.theme-dark .next-action>div>span{background:#4d765d}
+.theme-dark .safe-state{background:#294532;color:#cfe4bf}
+.theme-dark .prototype-signature{background:#17231e;color:#d8e8dc;border-color:#416158}
