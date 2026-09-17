@@ -1,6 +1,12 @@
 name: Build and publish desktop releases
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build'
+        required: true
+        default: 'v0.2.8'
   push:
     tags:
       - 'v*'
@@ -53,7 +59,7 @@ jobs:
       - name: Publish private GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
           find release-assets -type f -print
