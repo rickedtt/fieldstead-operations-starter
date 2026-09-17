@@ -33,6 +33,7 @@
 .theme-dark .value-strip{background:#1d352b;color:var(--ink)}
 .theme-dark .mobile-nav{background:rgb(23 35 30 / 96%);border-color:var(--line)}
 .theme-dark .mobile-nav button{color:#9bb0a5}
+.theme-dark .nav-item.active{background:#18352b;color:#e9f2ec;border:1px solid #68a88e;box-shadow:inset 3px 0 0 #9dcc78}
 .theme-dark .close,.theme-dark .secondary{background:#23322c;color:var(--ink);border-color:var(--line)}
 .theme-dark .change-log{border-top-color:var(--line)}
 .theme-dark .change-log article{border-bottom-color:var(--line)}
