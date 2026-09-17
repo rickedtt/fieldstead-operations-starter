@@ -1,6 +1,6 @@
 {
   "name": "fieldstead-operations-starter",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "private": true,
   "description": "Fieldstead Systems internal Operations Starter dogfood system.",
   "author": "Fieldstead Systems",
@@ -22,7 +22,8 @@
     "test:watch": "vitest --config vitest.config.ts",
     "desktop:dist:portable": "npm run desktop:prepare-server && npm run package:validate && electron-builder --win portable --x64",
     "desktop:publish:hq": "npm run desktop:dist:portable && node scripts/publish-windows-demo-to-hq.mjs",
-    "desktop:prepare-server": "npm run build && npm install --omit=dev --prefix dist/standalone vinext@1.0.0-beta.3"
+    "desktop:prepare-server": "npm run build && npm install --omit=dev --prefix dist/standalone vinext@1.0.0-beta.3",
+    "desktop:dist:all": "npm run desktop:prepare-server && electron-builder --linux AppImage --win portable nsis --x64"
   },
   "dependencies": {
     "dexie": "^4.2.0",
