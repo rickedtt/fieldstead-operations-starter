@@ -148,15 +148,6 @@ export default function Home() {
     setToast(`${customer.name} removed`);
     void localJobs.replaceDemoJobs(next.jobs).catch(() => setToast('Customer removed from view, but local job cleanup failed'));
   }
-  function resetDemo() {
-    if (window.confirm('Clear all local Fieldstead records and restore the empty starting workspace?')) {
-      setUiState(structuredClone(seedState));
-      setSelectedJobId(undefined);
-      setSelectedCustomerId(undefined);
-      setToast('Empty Fieldstead workspace restored');
-      void localJobs.restoreSeedJobs().catch(() => undefined);
-    }
-  }
   async function migratePreviousData() {
     try {
       const result = await localJobs.migrateLocalStorage();
@@ -207,14 +198,14 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner</span><button aria-label="Reset local Fieldstead records" title="Reset local Fieldstead records" onClick={resetDemo}>↻</button></div>
+        <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner</span></div>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
           <button className="mobile-brand" aria-label="Go to overview" onClick={() => setView('Overview')}><Image src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems"/></button>
           <div><p className="eyebrow">FIELDSTEAD SYSTEMS</p><h1>{view === 'Overview' ? 'Owner operations, at a glance.' : view}</h1></div>
-          <div className="header-actions"><button className="migration-action" onClick={() => void migratePreviousData()}>Import previous local data</button><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></div>
+          {view !== 'Settings' && <div className="header-actions"><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></div>}
         </header>
 
         <div className="dogfood-banner" role="note"><span>Confirmed Fieldstead records only · no customer messages, invoices, or payments are sent.</span></div>
@@ -225,7 +216,7 @@ export default function Home() {
           {view === 'Customers' && <CustomersView state={state} query={query} setQuery={setQuery} openCustomer={setSelectedCustomerId} newCustomer={() => setModal('customer')} />}
           {view === 'Activity' && <ActivityView state={state} openJob={setSelectedJobId} />}
           {view === 'Client Delivery' && <ClientDeliveryView state={state} applyImport={applyStagedImport} restore={restoreBackup} />}
-          {view === 'Settings' && <SettingsView theme={theme} setTheme={setTheme} />}
+          {view === 'Settings' && <SettingsView theme={theme} setTheme={setTheme} migratePreviousData={() => void migratePreviousData()} />}
         </div>
 
         <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -242,7 +233,7 @@ export default function Home() {
   );
 }
 
-function SettingsView({ theme, setTheme }: { theme: Theme; setTheme: (theme: Theme) => void }) {
+function SettingsView({ theme, setTheme, migratePreviousData }: { theme: Theme; setTheme: (theme: Theme) => void; migratePreviousData: () => void }) {
   const [status, setStatus] = useState('Checking GitHub for updates…');
   const [available, setAvailable] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -265,6 +256,7 @@ function SettingsView({ theme, setTheme }: { theme: Theme; setTheme: (theme: The
   }
   return <div className="settings-page">
     <div className="activity-intro"><p className="eyebrow">SETTINGS</p><h2>Fieldstead Systems</h2><p>Choose how the program looks. This preference is saved on this device and does not follow the operating system.</p></div>
+    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">LOCAL DATA</p><h2>Import previous data</h2></div></div><p className="settings-copy">Bring forward compatible local records from an earlier Fieldstead workspace.</p><button className="secondary" onClick={migratePreviousData}>Import previous local data</button></section>
     <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">APPEARANCE</p><h2>Display mode</h2></div><span className="pill pill-approved">{theme === 'dark' ? 'Dark' : 'Light'}</span></div><p className="settings-copy">Dark mode is the default. Light mode is available when you prefer a brighter workspace.</p><div className="theme-picker" role="group" aria-label="Display mode"><button className={theme === 'dark' ? 'primary' : 'secondary'} onClick={() => setTheme('dark')}>Dark mode</button><button className={theme === 'light' ? 'primary' : 'secondary'} onClick={() => setTheme('light')}>Light mode</button></div></section>
     <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">GITHUB UPDATES</p><h2>Keep this program current</h2></div><span className="pill pill-approved">GitHub</span></div><p className="settings-copy">Updates appear here only when a newer Fieldstead release has been published.</p>{(available || downloaded) && <div className="header-actions">{!downloaded && <button className="primary" onClick={() => void download()}>Download update</button>}{downloaded && <button className="primary" onClick={() => void install()}>Restart and install</button>}</div>}<p className="settings-status" role="status">{status}</p><div className="change-log"><p className="eyebrow">CHANGE LOG</p>{UPDATE_CHANGELOG.map((entry) => <article key={`${entry.version}-${entry.detail}`}><div><strong>{entry.version}</strong><small>{entry.date}</small></div><p>{entry.detail}</p></article>)}</div></section>
   </div>;
