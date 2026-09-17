@@ -38,3 +38,22 @@
 .theme-dark .change-log{border-top-color:var(--line)}
 .theme-dark .change-log article{border-bottom-color:var(--line)}
 .theme-picker{display:flex;gap:10px;flex-wrap:wrap}.change-log{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}.change-log article{display:grid;grid-template-columns:112px 1fr;gap:18px;padding:13px 0;border-bottom:1px solid var(--line)}.change-log article strong,.change-log article small{display:block}.change-log article small{margin-top:4px;color:var(--muted);font-size:11px}.change-log article p{margin:0;color:var(--muted);line-height:1.5}
+
+/* Dark-mode surfaces and resize safeguards. */
+.theme-dark .topbar{background:var(--paper);color:var(--ink)}
+.theme-dark .secondary{background:#17231e;color:var(--ink);border-color:var(--line)}
+.theme-dark .secondary:hover{background:#20352b}
+.theme-dark .value-strip{border-color:var(--line);color:var(--ink)}
+.theme-dark .action-list>button,.theme-dark .workflow-chain,.theme-dark .delivery-card,.theme-dark .safe-state{background:var(--card);color:var(--ink);border-color:var(--line)}
+.theme-dark .pill{background:#263a31;color:#c8ded0}
+.theme-dark .pill-scheduled,.theme-dark .pill-approved,.theme-dark .pill-jordan{background:#294532;color:#cfe4bf}
+.theme-dark .pill-en-route,.theme-dark .pill-in-progress,.theme-dark .pill-sent{background:#223d42;color:#b9dce0}
+.theme-dark .pill-quoted,.theme-dark .pill-draft{background:#493b20;color:#f0d493}
+.theme-dark .pill-completed,.theme-dark .pill-paid{background:#244333;color:#bfe0c8}
+.theme-dark .pill-overdue,.theme-dark .pill-declined,.theme-dark .pill-canceled{background:#4a2d2a;color:#efb8ad}
+.theme-dark .settings-status{color:var(--muted)}
+.update-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.topbar>div:nth-child(2){min-width:0}
+.topbar h1{overflow-wrap:anywhere}
+.workspace{overflow-x:hidden}
+@media(max-width:800px){.topbar{gap:12px}.topbar>div:nth-child(2){flex:1}.header-actions{flex-shrink:0}.content{width:min(100% - 28px,700px)}}

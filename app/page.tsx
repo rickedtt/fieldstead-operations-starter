@@ -237,28 +237,38 @@ function SettingsView({ theme, setTheme, migratePreviousData }: { theme: Theme; 
   const [status, setStatus] = useState('Checking GitHub for updates…');
   const [available, setAvailable] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
+  const [checking, setChecking] = useState(false);
   useEffect(() => {
     const unsubscribe = window.fieldsteadDesktop?.onUpdateStatus((update) => {
-      if (update.event === 'update-available') { setAvailable(true); setStatus('A new Fieldstead update is available.'); }
-      if (update.event === 'update-not-available') setStatus('This program is up to date.');
-      if (update.event === 'update-downloaded') { setDownloaded(true); setStatus('Update downloaded. Restart to install it.'); }
-      if (update.event === 'download-progress') setStatus('Downloading update…');
-      if (update.event === 'error') setStatus('GitHub update check is unavailable right now.');
+      if (update.event === 'checking-for-update') { setChecking(true); setStatus('Checking GitHub for updates…'); }
+      if (update.event === 'update-available') { setChecking(false); setAvailable(true); setStatus('A new Fieldstead update is available.'); }
+      if (update.event === 'update-not-available') { setChecking(false); setStatus('This program is up to date.'); }
+      if (update.event === 'update-downloaded') { setChecking(false); setDownloaded(true); setStatus('Update downloaded. Click Install update now to apply it.'); }
+      if (update.event === 'download-progress') { setChecking(false); setStatus('Downloading update…'); }
+      if (update.event === 'error') { setChecking(false); setStatus('GitHub update check is unavailable right now.'); }
     });
+    void window.fieldsteadDesktop?.checkForUpdates();
     return () => unsubscribe?.();
   }, []);
+  async function check() {
+    setChecking(true);
+    setStatus('Checking GitHub for updates…');
+    const result = await window.fieldsteadDesktop?.checkForUpdates();
+    if (result?.status === 'development') { setChecking(false); setStatus('Updates are available from the packaged desktop program.'); }
+  }
   async function download() {
     setStatus('Downloading update from GitHub…');
     await window.fieldsteadDesktop?.downloadUpdate();
   }
   async function install() {
+    setStatus('Installing update and restarting the program…');
     await window.fieldsteadDesktop?.installUpdate();
   }
   return <div className="settings-page">
     <div className="activity-intro"><p className="eyebrow">SETTINGS</p><h2>Fieldstead Systems</h2><p>Choose how the program looks. This preference is saved on this device and does not follow the operating system.</p></div>
     <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">LOCAL DATA</p><h2>Import previous data</h2></div></div><p className="settings-copy">Bring forward compatible local records from an earlier Fieldstead workspace.</p><button className="secondary" onClick={migratePreviousData}>Import previous local data</button></section>
     <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">APPEARANCE</p><h2>Display mode</h2></div><span className="pill pill-approved">{theme === 'dark' ? 'Dark' : 'Light'}</span></div><p className="settings-copy">Dark mode is the default. Light mode is available when you prefer a brighter workspace.</p><div className="theme-picker" role="group" aria-label="Display mode"><button className={theme === 'dark' ? 'primary' : 'secondary'} onClick={() => setTheme('dark')}>Dark mode</button><button className={theme === 'light' ? 'primary' : 'secondary'} onClick={() => setTheme('light')}>Light mode</button></div></section>
-    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">GITHUB UPDATES</p><h2>Keep this program current</h2></div><span className="pill pill-approved">GitHub</span></div><p className="settings-copy">Updates appear here only when a newer Fieldstead release has been published.</p>{(available || downloaded) && <div className="header-actions">{!downloaded && <button className="primary" onClick={() => void download()}>Download update</button>}{downloaded && <button className="primary" onClick={() => void install()}>Restart and install</button>}</div>}<p className="settings-status" role="status">{status}</p><div className="change-log"><p className="eyebrow">CHANGE LOG</p>{UPDATE_CHANGELOG.map((entry) => <article key={`${entry.version}-${entry.detail}`}><div><strong>{entry.version}</strong><small>{entry.date}</small></div><p>{entry.detail}</p></article>)}</div></section>
+    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">GITHUB UPDATES</p><h2>Keep this program current</h2></div><span className="pill pill-approved">GitHub</span></div><p className="settings-copy">Check GitHub here and install a newer packaged Fieldstead release without manually reopening the program.</p><div className="update-actions"><button className="secondary" disabled={checking} onClick={() => void check()}>{checking ? 'Checking…' : 'Check for updates'}</button>{available && !downloaded && <button className="primary" onClick={() => void download()}>Update now</button>}{downloaded && <button className="primary" onClick={() => void install()}>Install update now</button>}</div><p className="settings-status" role="status">{status}</p><div className="change-log"><p className="eyebrow">CHANGE LOG</p>{UPDATE_CHANGELOG.map((entry) => <article key={`${entry.version}-${entry.detail}`}><div><strong>{entry.version}</strong><small>{entry.date}</small></div><p>{entry.detail}</p></article>)}</div></section>
   </div>;
 }
 
