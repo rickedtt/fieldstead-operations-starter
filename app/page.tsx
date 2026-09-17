@@ -73,6 +73,7 @@ export default function Home() {
     [uiState, localJobs.jobs],
   );
   const [view, setView] = useState<View>('Overview');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'dark';
     return window.localStorage.getItem('fieldstead-theme') === 'light' ? 'light' : 'dark';
@@ -188,9 +189,10 @@ export default function Home() {
   function goToJobs(filter = 'All') { setStatusFilter(filter); setQuery(''); setView('Jobs'); }
 
   return (
-    <main className={cx('app-shell', `theme-${theme}`)}>
+    <main className={cx('app-shell', `theme-${theme}`, sidebarCollapsed && 'sidebar-collapsed')}>
       <aside className="sidebar">
         <div className="brand"><Image className="brand-logo" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/></div>
+        <button className="sidebar-toggle" type="button" aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? '›' : '‹'}</button>
         <nav aria-label="Main navigation">
           {(['Overview','Jobs','Customers','Activity','Client Delivery','Settings'] as View[]).map((item) => (
             <button key={item} className={cx('nav-item', view === item && 'active')} onClick={() => setView(item)}>
@@ -219,9 +221,6 @@ export default function Home() {
           {view === 'Settings' && <SettingsView theme={theme} setTheme={setTheme} migratePreviousData={() => void migratePreviousData()} />}
         </div>
 
-        <nav className="mobile-nav" aria-label="Mobile navigation">
-          {(['Overview','Jobs','Customers','Activity','Client Delivery','Settings'] as View[]).map((item) => <button key={item} className={view === item ? 'active' : ''} onClick={() => setView(item)}><span aria-hidden="true">{item === 'Overview' ? '⌂' : item === 'Jobs' ? '□' : item === 'Customers' ? '◎' : item === 'Activity' ? '↻' : '⇄'}</span>{item === 'Client Delivery' ? 'Delivery' : item}</button>)}
-        </nav>
       </section>
 
       {selectedJob && <JobDrawer state={state} job={selectedJob} close={() => setSelectedJobId(undefined)} save={(next,message) => mutate(next,message)} />}
