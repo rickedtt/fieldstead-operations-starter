@@ -57,3 +57,30 @@
 .topbar h1{overflow-wrap:anywhere}
 .workspace{overflow-x:hidden}
 @media(max-width:800px){.topbar{gap:12px}.topbar>div:nth-child(2){flex:1}.header-actions{flex-shrink:0}.content{width:min(100% - 28px,700px)}}
+
+/* Compact-window layout: reflow before desktop controls can clip off-screen. */
+.metric-grid,.overview-grid,.activity-page,.delivery-grid,.settings-page,.settings-card,.section-title,.header-actions{min-width:0}
+.metric-grid>*,.overview-grid>*,.activity-page>*,.delivery-grid>*,.settings-page>*{min-width:0}
+.metric-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1050px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:minmax(0,1fr)}.table-head,.table-row{grid-template-columns:minmax(0,1.3fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,1fr)}}
+@media(max-width:1000px){
+  .app-shell{display:block;min-width:0}
+  .sidebar{display:none}
+  .workspace{min-width:0;padding-bottom:70px}
+  .topbar{min-height:92px;padding:18px 20px;gap:12px;align-items:center}
+  .topbar>div:nth-child(2){flex:1;min-width:0}
+  .topbar h1{font-size:clamp(23px,4vw,32px);white-space:normal}
+  .topbar .eyebrow{display:none}
+  .mobile-brand{display:grid;place-items:center;flex:none;width:40px;height:40px;border:1px solid #a8b8a3;border-radius:50%;background:#17372f;color:white;font:600 12px Georgia,serif}
+  .header-actions{flex:0 1 auto;flex-wrap:wrap;justify-content:flex-end;gap:7px}
+  .header-actions .primary,.header-actions .secondary{padding:9px 11px;white-space:nowrap}
+  .desktop-only{display:none}
+  .content{width:min(100% - 28px,780px);padding:22px 0 40px}
+  .mobile-nav{position:fixed;z-index:10;left:0;right:0;bottom:0;height:66px;display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);background:rgb(23 35 30 / 96%);backdrop-filter:blur(12px)}
+  .mobile-nav button{border:0;background:transparent;color:#9bb0a5;font-size:9px;font-weight:750;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mobile-nav button span{display:block;margin-bottom:3px;font-size:17px}
+  .mobile-nav button.active{color:var(--green)}
+  .value-strip{align-items:flex-start;gap:12px}
+  .value-strip>span{display:none}
+}
+@media(max-width:560px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.metric-grid article{padding:16px}.section-title{align-items:flex-start;flex-wrap:wrap}.change-log article{grid-template-columns:1fr;gap:5px}.topbar{padding-inline:14px}.content{width:calc(100% - 24px)}}
