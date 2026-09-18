@@ -323,3 +323,6 @@ export function parseOperationResult(value: unknown): OperationResult {
     conflicts,
   };
 }
+
+export * from './client';
+export * from './transport';

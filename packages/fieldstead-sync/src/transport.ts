@@ -18,6 +18,48 @@ export interface SyncTransport {
   submit(batch: OperationBatch): Promise<OperationResult>;
 }
 
+export type HttpSyncTransportOptions = {
+  endpoint: string;
+  getAccessToken: () => string | undefined | Promise<string | undefined>;
+  fetcher?: typeof fetch;
+};
+
+/** Production client transport for the authenticated Fieldstead sync route. */
+export class HttpSyncTransport implements SyncTransport {
+  private readonly fetcher: typeof fetch;
+
+  constructor(private readonly options: HttpSyncTransportOptions) {
+    this.fetcher = options.fetcher ?? fetch;
+  }
+
+  async submit(input: OperationBatch): Promise<OperationResult> {
+    const batch = parseOperationBatch(input);
+    const token = await this.options.getAccessToken();
+    if (!token) throw new Error("Fieldstead sync requires an access token.");
+
+    const response = await this.fetcher(this.options.endpoint, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer " + token,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(batch),
+    });
+    const body: unknown = await response.json().catch(() => undefined);
+    if (!response.ok) {
+      const message =
+        typeof body === "object" && body !== null && "error" in body && typeof body.error === "string"
+          ? body.error
+          : "Fieldstead sync failed with HTTP " + response.status + ".";
+      const error = new Error(message);
+      Object.assign(error, { status: response.status, retryable: response.status >= 500 });
+      throw error;
+    }
+    return parseOperationResult(body);
+  }
+}
+
 export type OperationDecision =
   | { status: 'accepted' }
   | {
