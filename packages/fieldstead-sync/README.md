@@ -20,11 +20,19 @@ identical retry. Reusing an ID for different content must be rejected with
 `idempotency_key_reused`. Batch IDs are for tracing and do not replace
 operation-level idempotency.
 
-`SyncTransport` is a typed, inactive future API boundary. The included
-`InMemorySyncTransport` is only a deterministic test double for client and
-contract tests. It has disposable process-local state and is never selected as
-a production fallback. The production boundary is the authenticated Workers
-`POST /api/sync` route backed by D1.
+`SyncTransport` is the shared client boundary used by both browser and Electron
+builds. `HttpSyncTransport` submits the validated batch to the authenticated
+Workers `POST /api/sync` route; it accepts an injected endpoint and token
+provider, so Windows and Omarchy can target the same deployment without
+localhost assumptions. `InMemorySyncTransport` remains only a deterministic test
+double and is never selected as a production fallback. `SyncClient` coalesces
+concurrent drains, preserves retryable operations, advances cursors, and passes
+terminal rejections/conflicts to the outbox.
+
+The client wiring is implemented, but live operation still requires deployment
+configuration: D1 binding, migrations, JWT issuance/rotation, active users, and
+a real Windows-to-Omarchy round-trip test. This package does not claim that
+those production boundaries are configured.
 
 ## Implemented server boundary
 
