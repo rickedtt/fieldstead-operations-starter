@@ -193,7 +193,7 @@ export default function Home() {
   return (
     <main className={cx('app-shell', `theme-${theme}`, sidebarCollapsed && 'sidebar-collapsed')}>
       <aside className="sidebar">
-        <div className="brand"><Image className="brand-logo" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/></div>
+        <div className="brand"><Image className="brand-logo brand-logo-full" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/><Image className="brand-logo-compact" src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems" priority/></div>
         <button className="sidebar-toggle" type="button" aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? '›' : '‹'}</button>
         <nav aria-label="Main navigation">
           {(['Overview','Jobs','Customers','Activity','Client Delivery','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Settings: '⚙' } as Record<View, string>)[item]; return (

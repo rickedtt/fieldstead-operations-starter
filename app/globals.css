@@ -143,3 +143,20 @@
 .topbar{min-width:0;overflow:hidden}
 .header-actions{min-width:0;flex-wrap:wrap;justify-content:flex-end}
 .header-actions button{max-width:100%}
+
+/* Verified compact rail: keep icons visible and use the square brand mark. */
+.brand-logo-compact{display:none}
+.sidebar-collapsed .brand-logo-full{display:none}
+.sidebar-collapsed .brand-logo-compact{display:block;width:32px;height:32px;border-radius:8px}
+.sidebar-collapsed .nav-item span.nav-icon{display:block}
+.sidebar-collapsed .nav-item span.nav-label{display:none}
+.sidebar-collapsed .nav-item{min-height:42px;align-items:center}
+@media(max-width:1000px){
+  .topbar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;overflow:visible}
+  .topbar>div:nth-child(2){min-width:0}
+  .header-actions{max-width:42%;overflow:hidden}
+  .header-actions .primary{overflow:hidden;text-overflow:ellipsis}
+  .content{width:calc(100% - 40px);max-width:none;min-width:0}
+  .content>*{min-width:0;max-width:100%}
+  .attention-card,.metric-grid article,.next-action,.activity-peek,.route-list{min-width:0;max-width:100%;overflow:hidden}
+}
