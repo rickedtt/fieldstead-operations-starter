@@ -208,6 +208,7 @@ export async function syncEmail(accountId) {
           receivedAt: message.envelope?.date?.toISOString?.() || new Date().toISOString(),
           text: parsed.text?.slice(0, 20000) || '',
           unread: !message.flags?.has?.('\\Seen'),
+          starred: message.flags?.has?.('\\Flagged') || false,
         });
       }
       return { ok: true, messages: messages.reverse(), syncedAt: new Date().toISOString() };
@@ -215,6 +216,32 @@ export async function syncEmail(accountId) {
   } catch (error) {
     throw new Error(`Inbox sync failed: ${describeMailError(error)}`);
   } finally { try { await client.close(); } catch {} }
+}
+
+export async function emailMessageAction(accountId, uid, action) {
+  const config = await getStoredEmailSecrets(accountId);
+  const client = new ImapFlow({ host: config.imap.host, port: config.imap.port, secure: config.imap.secure, auth: { user: config.username, pass: config.password }, logger: false });
+  const lock = await client.getMailboxLock('INBOX');
+  try {
+    const range = String(uid);
+    if (action === 'read') await client.messageFlagsAdd(range, ['\\Seen']);
+    else if (action === 'unread') await client.messageFlagsRemove(range, ['\\Seen']);
+    else if (action === 'star') await client.messageFlagsAdd(range, ['\\Flagged']);
+    else if (action === 'unstar') await client.messageFlagsRemove(range, ['\\Flagged']);
+    else if (action === 'delete') await client.messageDelete(range);
+    else if (action === 'archive') {
+      const mailboxes = await client.list();
+      const archive = mailboxes.find((mailbox) => mailbox.specialUse === '\\All')?.path || mailboxes.find((mailbox) => /all mail|archive/i.test(mailbox.path))?.path;
+      if (!archive) throw new Error('This provider does not expose an archive mailbox.');
+      await client.messageMove(range, archive);
+    } else throw new Error(`Unsupported email action: ${action}`);
+    return { ok: true, action, uid: range };
+  } catch (error) {
+    throw new Error(`Email action failed: ${describeMailError(error)}`);
+  } finally {
+    lock.release();
+    try { await client.close(); } catch {}
+  }
 }
 
 export async function sendEmail(input, accountId) {

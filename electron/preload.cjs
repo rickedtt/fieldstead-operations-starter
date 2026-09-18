@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld(
     clearEmailConfig: (accountId) => ipcRenderer.invoke('fieldstead:email-clear', accountId),
     syncEmail: (accountId) => ipcRenderer.invoke('fieldstead:email-sync', accountId),
     sendEmail: (input, accountId) => ipcRenderer.invoke('fieldstead:email-send', input, accountId),
+    emailMessageAction: (accountId, uid, action) => ipcRenderer.invoke('fieldstead:email-action', accountId, uid, action),
     checkForUpdates: () => ipcRenderer.invoke('fieldstead:check-for-updates'),
     downloadUpdate: () => ipcRenderer.invoke('fieldstead:download-update'),
     installUpdate: () => ipcRenderer.invoke('fieldstead:install-update'),

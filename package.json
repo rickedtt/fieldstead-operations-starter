@@ -1,6 +1,6 @@
 {
   "name": "fieldstead-operations-starter",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "private": true,
   "description": "Fieldstead Systems internal Operations Starter dogfood system.",
   "author": "Fieldstead Systems",
@@ -16,7 +16,7 @@
     "desktop:build": "npm run desktop:prepare-server && npm run package:validate && electron-builder --dir",
     "desktop:dist:win": "npm run desktop:prepare-server && npm run package:validate && electron-builder --win nsis portable --x64",
     "desktop:validate": "npm run package:validate",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern release",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern release --ignore-pattern .hermes-tmp",
     "package:validate": "node scripts/validate-desktop-package.mjs && npm pack --dry-run",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
