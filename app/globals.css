@@ -19,7 +19,7 @@
 
 .dogfood-banner{margin:0;padding:9px clamp(24px,5vw,72px);display:flex;align-items:center;justify-content:center;gap:9px;border-bottom:1px solid #d6dbc9;background:#e9efdf;color:#405448;font-size:11px}.dogfood-banner strong{color:var(--ink)}.dogfood-banner span{color:#68766e}
 
-@media(max-width:1050px){.delivery-grid{grid-template-columns:1fr}.workflow-chain{grid-template-columns:repeat(9,110px)}.count-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1050px){.delivery-grid{grid-template-columns:1fr}.workflow-chain{grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}.workflow-chain li{min-width:0}.workflow-chain b{display:none}.count-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:800px){.prototype-signature{display:none}.dogfood-banner{align-items:flex-start;flex-direction:column;gap:2px}.mobile-nav{grid-template-columns:repeat(5,1fr)}.delivery-intro{padding:20px}.delivery-intro h2{font-size:25px}.demo-seal{width:64px;height:64px}.delivery-card{padding:18px}}
 @media(max-width:520px){.delivery-intro{align-items:flex-start}.demo-seal{display:none}.mapping-grid{grid-template-columns:1fr}.count-grid{grid-template-columns:repeat(2,1fr)}.issue-list>div{grid-template-columns:50px 72px 1fr}.workflow-chain{margin-inline:-2px}.migration-action{display:none}}
 
