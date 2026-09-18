@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { app, safeStorage } from 'electron';
@@ -26,44 +27,44 @@ function decryptSecret(value) {
   return safeStorage.decryptString(Buffer.from(value, 'base64'));
 }
 
-function publicConfig(config) {
-  if (!config) return null;
+function publicAccount(account) {
+  if (!account) return null;
   return {
-    provider: config.provider,
-    email: config.email,
-    displayName: config.displayName,
-    imap: config.imap,
-    smtp: config.smtp,
-    lastTestedAt: config.lastTestedAt ?? null,
+    id: account.id,
+    provider: account.provider,
+    email: account.email,
+    displayName: account.displayName,
+    imap: account.imap,
+    smtp: account.smtp,
+    lastTestedAt: account.lastTestedAt ?? null,
     configured: true,
   };
 }
 
-async function readConfig() {
+async function readStore() {
   try {
-    const raw = await fs.readFile(configPath(), 'utf8');
-    return JSON.parse(raw);
+    const raw = JSON.parse(await fs.readFile(configPath(), 'utf8'));
+    if (Array.isArray(raw.accounts)) return raw;
+    // Migrate the original single-account format without exposing its secret.
+    if (raw.encryptedPassword) { const id = raw.id || randomUUID(); return { activeAccountId: id, accounts: [{ ...raw, id }] }; }
+    return { activeAccountId: null, accounts: [] };
   } catch (error) {
-    if (error?.code === 'ENOENT') return null;
+    if (error?.code === 'ENOENT') return { activeAccountId: null, accounts: [] };
     throw error;
   }
 }
 
-async function writeConfig(config) {
+async function writeStore(store) {
   await fs.mkdir(path.dirname(configPath()), { recursive: true });
-  await fs.writeFile(configPath(), JSON.stringify(config), { mode: 0o600 });
+  await fs.writeFile(configPath(), JSON.stringify(store), { mode: 0o600 });
 }
 
-function describeMailError(error) {
-  if (!error) return 'Unknown mail-server error.';
-  const parts = [
-    error.message,
-    error.code,
-    error.responseStatus,
-    error.responseText,
-    error.authenticationFailed ? 'authentication failed' : '',
-  ].filter(Boolean).map(String);
-  return [...new Set(parts)].join(' — ') || String(error);
+async function getAccount(accountId) {
+  const store = await readStore();
+  const id = accountId || store.activeAccountId;
+  const account = store.accounts.find((candidate) => candidate.id === id) || store.accounts[0];
+  if (!account) throw new Error('Email is not configured on this device.');
+  return { store, account };
 }
 
 function normalizeInput(input) {
@@ -121,8 +122,14 @@ async function testSmtp(config) {
   }
 }
 
+export async function getEmailAccounts() {
+  const store = await readStore();
+  return { accounts: store.accounts.map(publicAccount), activeAccountId: store.activeAccountId || store.accounts[0]?.id || null };
+}
+
 export async function getEmailConfig() {
-  return publicConfig(await readConfig());
+  const result = await getEmailAccounts();
+  return result.accounts.find((account) => account.id === result.activeAccountId) || null;
 }
 
 export async function testEmailConnection(input) {
@@ -136,7 +143,9 @@ export async function saveEmailConfig(input) {
   const config = normalizeInput(input);
   await testImap(config);
   await testSmtp(config);
+  const store = await readStore();
   const stored = {
+    id: randomUUID(),
     provider: config.provider,
     email: config.email,
     displayName: config.displayName,
@@ -146,24 +155,29 @@ export async function saveEmailConfig(input) {
     encryptedPassword: encryptSecret(config.password),
     lastTestedAt: new Date().toISOString(),
   };
-  await writeConfig(stored);
-  return publicConfig(stored);
+  store.accounts = [...store.accounts, stored];
+  store.activeAccountId = stored.id;
+  await writeStore(store);
+  return publicAccount(stored);
 }
 
-export async function clearEmailConfig() {
-  try { await fs.unlink(configPath()); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
-  return { configured: false };
+export async function clearEmailConfig(accountId) {
+  const store = await readStore();
+  const id = accountId || store.activeAccountId;
+  store.accounts = store.accounts.filter((account) => account.id !== id);
+  store.activeAccountId = store.accounts[0]?.id || null;
+  await writeStore(store);
+  return { configured: store.accounts.length > 0, accounts: store.accounts.map(publicAccount), activeAccountId: store.activeAccountId };
 }
 
-export async function getStoredEmailSecrets() {
-  const config = await readConfig();
-  if (!config) return null;
-  return { ...config, password: decryptSecret(config.encryptedPassword) };
+export async function getStoredEmailSecrets(accountId) {
+  const { account } = await getAccount(accountId);
+  return { ...account, password: decryptSecret(account.encryptedPassword) };
 }
 
 
-export async function syncEmail() {
-  const config = await getStoredEmailSecrets();
+export async function syncEmail(accountId) {
+  const config = await getStoredEmailSecrets(accountId);
   if (!config) throw new Error('Email is not configured on this device.');
   const client = new ImapFlow({ host: config.imap.host, port: config.imap.port, secure: config.imap.secure, auth: { user: config.username, pass: config.password }, logger: false });
   try {
@@ -191,8 +205,8 @@ export async function syncEmail() {
   } finally { try { await client.close(); } catch {} }
 }
 
-export async function sendEmail(input) {
-  const config = await getStoredEmailSecrets();
+export async function sendEmail(input, accountId) {
+  const config = await getStoredEmailSecrets(accountId);
   if (!config) throw new Error('Email is not configured on this device.');
   const to = String(input?.to ?? '').trim();
   const subject = String(input?.subject ?? '').trim();
