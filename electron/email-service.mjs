@@ -67,6 +67,18 @@ async function getAccount(accountId) {
   return { store, account };
 }
 
+function describeMailError(error) {
+  if (!error) return 'Unknown mail-server error.';
+  const parts = [
+    error.message,
+    error.code,
+    error.responseStatus,
+    error.responseText,
+    error.authenticationFailed ? 'authentication failed' : '',
+  ].filter(Boolean).map(String);
+  return [...new Set(parts)].join(' — ') || String(error);
+}
+
 function normalizeInput(input) {
   const clean = (value) => String(value ?? '').trim();
   const port = (value, fallback) => Number.parseInt(String(value ?? fallback), 10);
