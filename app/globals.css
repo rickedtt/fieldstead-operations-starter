@@ -126,3 +126,20 @@
 .theme-dark .next-action>div>span{background:#4d765d}
 .theme-dark .safe-state{background:#294532;color:#cfe4bf}
 .theme-dark .prototype-signature{background:#17231e;color:#d8e8dc;border-color:#416158}
+
+
+/* Compact sidebar: keep navigation useful without leaking text into the icon rail. */
+.nav-icon{display:none;flex:none;width:24px;text-align:center;font:600 20px/1 Georgia,serif}
+.sidebar-collapsed .nav-item{gap:0}
+.sidebar-collapsed .nav-icon{display:block}
+.sidebar-collapsed .nav-label,.sidebar-collapsed .sidebar-foot>span:not(.avatar),.sidebar-collapsed .local-note{display:none}
+.sidebar-collapsed .sidebar-foot{grid-template-columns:1fr;justify-items:center;padding-inline:0;gap:0}
+.sidebar-collapsed .avatar{width:34px;height:34px}
+
+/* Never let the delivery workflow or header controls create page-level overflow. */
+.workflow-chain{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));overflow:visible}
+.workflow-chain li{min-width:0}
+.workflow-chain b{display:none}
+.topbar{min-width:0;overflow:hidden}
+.header-actions{min-width:0;flex-wrap:wrap;justify-content:flex-end}
+.header-actions button{max-width:100%}

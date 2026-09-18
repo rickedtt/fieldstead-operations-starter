@@ -194,11 +194,11 @@ export default function Home() {
         <div className="brand"><Image className="brand-logo" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/></div>
         <button className="sidebar-toggle" type="button" aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? '›' : '‹'}</button>
         <nav aria-label="Main navigation">
-          {(['Overview','Jobs','Customers','Activity','Client Delivery','Settings'] as View[]).map((item) => (
+          {(['Overview','Jobs','Customers','Activity','Client Delivery','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Settings: '⚙' } as Record<View, string>)[item]; return (
             <button key={item} className={cx('nav-item', view === item && 'active')} onClick={() => setView(item)}>
-              <span>{item}</span>{item === 'Jobs' && <b>{openJobs.length}</b>}
+              <span className="nav-icon" aria-hidden="true">{icon}</span><span className="nav-label">{item}</span>{item === 'Jobs' && <b>{openJobs.length}</b>}
             </button>
-          ))}
+          ); })}
         </nav>
         <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner</span></div>
       </aside>
