@@ -48,6 +48,7 @@ jobs:
           path: |
             release/*Portable*.exe
             release/*Setup*.exe
+            release/*.yml
 
   publish:
     needs: [linux, windows]
