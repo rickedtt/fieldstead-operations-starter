@@ -7,6 +7,9 @@ import { app, BrowserWindow, dialog, ipcMain, screen, session } from 'electron';
 import { clearEmailConfig, getEmailConfig, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
 import updater from 'electron-updater';
 const { autoUpdater } = updater;
+
+// Use Omarchy's GNOME keyring for Electron safeStorage.
+app.commandLine.appendSwitch('password-store', 'gnome-libsecret');
 import {
   isAllowedDesktopUrl,
   isAllowedNavigationUrl,
