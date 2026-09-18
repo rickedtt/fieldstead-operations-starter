@@ -4,6 +4,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, screen, session } from 'electron';
+import { clearEmailConfig, getEmailConfig, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
 import updater from 'electron-updater';
 const { autoUpdater } = updater;
 import {
@@ -30,6 +31,19 @@ autoUpdater.autoInstallOnAppQuit = true;
 for (const event of ['checking-for-update', 'update-available', 'update-not-available', 'download-progress', 'update-downloaded', 'error']) {
   autoUpdater.on(event, (...args) => publishUpdateStatus({ event, detail: args[0] ?? null }));
 }
+
+ipcMain.handle('fieldstead:email-config', async () => getEmailConfig());
+ipcMain.handle('fieldstead:email-test', async (_event, input) => {
+  try { return await testEmailConnection(input); }
+  catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; }
+});
+ipcMain.handle('fieldstead:email-save', async (_event, input) => {
+  try { return { ok: true, config: await saveEmailConfig(input) }; }
+  catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; }
+});
+ipcMain.handle('fieldstead:email-clear', async () => clearEmailConfig());
+ipcMain.handle('fieldstead:email-sync', async () => { try { return await syncEmail(); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
+ipcMain.handle('fieldstead:email-send', async (_event, input) => { try { return await sendEmail(input); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
 
 ipcMain.handle('fieldstead:check-for-updates', async () => {
   if (!app.isPackaged) return { status: 'development', message: 'Updates are checked from the packaged GitHub release.' };

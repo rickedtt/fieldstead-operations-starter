@@ -7,6 +7,12 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     platform: process.platform,
     desktop: true,
+    getEmailConfig: () => ipcRenderer.invoke('fieldstead:email-config'),
+    testEmailConnection: (input) => ipcRenderer.invoke('fieldstead:email-test', input),
+    saveEmailConfig: (input) => ipcRenderer.invoke('fieldstead:email-save', input),
+    clearEmailConfig: () => ipcRenderer.invoke('fieldstead:email-clear'),
+    syncEmail: () => ipcRenderer.invoke('fieldstead:email-sync'),
+    sendEmail: (input) => ipcRenderer.invoke('fieldstead:email-send', input),
     checkForUpdates: () => ipcRenderer.invoke('fieldstead:check-for-updates'),
     downloadUpdate: () => ipcRenderer.invoke('fieldstead:download-update'),
     installUpdate: () => ipcRenderer.invoke('fieldstead:install-update'),

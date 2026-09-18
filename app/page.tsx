@@ -14,9 +14,11 @@ import {
 } from '../lib/client-delivery';
 import { useFieldsteadLocalJobs } from './store/fieldstead-local';
 
-type View = 'Overview' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Settings';
+type View = 'Overview' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Email' | 'Settings';
 type Theme = 'dark' | 'light';
 type EmailSetup = { businessEmail: string; displayName: string; provider: string; purpose: string };
+type EmailConnectionInput = { provider: string; email: string; displayName: string; username: string; password: string; imap: { host: string; port: number; secure: boolean }; smtp: { host: string; port: number; secure: boolean } };
+type EmailMessage = { id: string; subject: string; from: string; fromName: string; receivedAt: string; text: string; unread: boolean };
 const EMPTY_EMAIL_SETUP: EmailSetup = { businessEmail: '', displayName: '', provider: 'Choose later', purpose: 'Customer communications' };
 
 const UPDATE_CHANGELOG = [
@@ -32,6 +34,12 @@ declare global {
       checkForUpdates: () => Promise<{ status: string; version?: string; message?: string }>;
       downloadUpdate: () => Promise<{ status: string; message?: string }>;
       installUpdate: () => Promise<{ status: string }>;
+      getEmailConfig: () => Promise<{ configured?: boolean; email?: string; provider?: string; lastTestedAt?: string } | null>;
+      testEmailConnection: (input: EmailConnectionInput) => Promise<{ ok: boolean; message: string }>;
+      saveEmailConfig: (input: EmailConnectionInput) => Promise<{ ok: boolean; message?: string; config?: unknown }>;
+      clearEmailConfig: () => Promise<{ configured: boolean }>;
+      syncEmail: () => Promise<{ ok: boolean; message?: string; messages?: EmailMessage[]; syncedAt?: string }>;
+      sendEmail: (input: { to: string; subject: string; text: string }) => Promise<{ ok: boolean; messageId?: string; message?: string }>;
       onUpdateStatus: (callback: (status: { event: string; detail?: unknown }) => void) => () => void;
     };
   }
@@ -196,7 +204,7 @@ export default function Home() {
         <div className="brand"><Image className="brand-logo brand-logo-full" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/><Image className="brand-logo-compact" src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems" priority/></div>
         <button className="sidebar-toggle" type="button" aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? '›' : '‹'}</button>
         <nav aria-label="Main navigation">
-          {(['Overview','Jobs','Customers','Activity','Client Delivery','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Settings: '⚙' } as Record<View, string>)[item]; return (
+          {(['Overview','Jobs','Customers','Activity','Client Delivery','Email','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Email: '✉', Settings: '⚙' } as Record<View, string>)[item]; return (
             <button key={item} className={cx('nav-item', view === item && 'active')} onClick={() => setView(item)}>
               <span className="nav-icon" aria-hidden="true">{icon}</span><span className="nav-label">{item}</span>{item === 'Jobs' && <b>{openJobs.length}</b>}
             </button>
@@ -220,6 +228,7 @@ export default function Home() {
           {view === 'Customers' && <CustomersView state={state} query={query} setQuery={setQuery} openCustomer={setSelectedCustomerId} newCustomer={() => setModal('customer')} />}
           {view === 'Activity' && <ActivityView state={state} openJob={setSelectedJobId} />}
           {view === 'Client Delivery' && <ClientDeliveryView state={state} applyImport={applyStagedImport} restore={restoreBackup} />}
+          {view === 'Email' && <EmailView state={state} />}
           {view === 'Settings' && <SettingsView theme={theme} setTheme={setTheme} migratePreviousData={() => void migratePreviousData()} />}
         </div>
 
@@ -232,6 +241,23 @@ export default function Home() {
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </main>
   );
+}
+
+function EmailView({ state }: { state: OperationsState }) {
+  const [connection, setConnection] = useState<EmailConnectionInput>({ provider:'Custom IMAP/SMTP', email:'', displayName:'', username:'', password:'', imap:{host:'',port:993,secure:true}, smtp:{host:'',port:465,secure:true} });
+  const [configured, setConfigured] = useState(false);
+  const [messages, setMessages] = useState<EmailMessage[]>([]);
+  const [status, setStatus] = useState('Email is not connected.');
+  const [busy, setBusy] = useState(false);
+  const [compose, setCompose] = useState({to:'',subject:'',text:''});
+  useEffect(() => { void window.fieldsteadDesktop?.getEmailConfig().then((value) => { if (value?.configured) { setConfigured(true); setStatus(`Connected as ${value.email || 'business email'}.`); } }); }, []);
+  function update(field: keyof EmailConnectionInput | 'imap.host' | 'imap.port' | 'smtp.host' | 'smtp.port', value: string) { setConnection((current) => { const next = structuredClone(current); if (field === 'email' || field === 'displayName' || field === 'username' || field === 'password') next[field] = value; else if (field === 'imap.host') next.imap.host = value; else if (field === 'smtp.host') next.smtp.host = value; else if (field === 'imap.port') next.imap.port = Number(value); else if (field === 'smtp.port') next.smtp.port = Number(value); return next; }); }
+  async function connect() { setBusy(true); setStatus('Testing IMAP and SMTP…'); const result = await window.fieldsteadDesktop?.saveEmailConfig(connection); setBusy(false); if (result?.ok) { setConfigured(true); setStatus('Email connected securely on this device.'); } else setStatus(result?.message || 'Email connection failed.'); }
+  async function sync() { setBusy(true); setStatus('Syncing incoming mail…'); const result = await window.fieldsteadDesktop?.syncEmail(); setBusy(false); if (result?.ok) { setMessages(result.messages || []); setStatus(`Synced ${result.messages?.length || 0} messages.`); } else setStatus(result?.message || 'Inbox sync failed.'); }
+  async function send() { setBusy(true); const result = await window.fieldsteadDesktop?.sendEmail(compose); setBusy(false); setStatus(result?.ok ? 'Message sent.' : (result?.message || 'Message could not be sent.')); if (result?.ok) setCompose({to:'',subject:'',text:''}); }
+  useEffect(() => { if (!configured) return undefined; const timer = window.setInterval(() => { void window.fieldsteadDesktop?.syncEmail().then((result) => { if (result?.ok) setMessages(result.messages || []); }); }, 60_000); return () => window.clearInterval(timer); }, [configured]);
+  const matched = (message: EmailMessage) => state.customers.find((customer) => customer.email.toLowerCase() === message.from.toLowerCase());
+  return <div className="settings-page email-page"><section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">EMAIL</p><h2>Inbox and customer communication</h2></div><span className={`pill ${configured ? 'pill-approved' : 'pill-pending'}`}>{configured ? 'Connected' : 'Setup needed'}</span></div><p className="settings-copy">Connect the client’s own mailbox, sync incoming messages, and send replies. Credentials are encrypted by the operating system.</p><p className="settings-status">{status}</p>{!configured ? <div className="email-connection-form"><div className="form-grid"><label>Business email<input type="email" value={connection.email} onChange={(event) => update('email',event.target.value)} /></label><label>Display name<input value={connection.displayName} onChange={(event) => update('displayName',event.target.value)} /></label></div><div className="form-grid"><label>Username<input value={connection.username} onChange={(event) => update('username',event.target.value)} /></label><label>Password or app password<input type="password" value={connection.password} onChange={(event) => update('password',event.target.value)} /></label></div><div className="form-grid"><label>IMAP host<input placeholder="imap.example.com" value={connection.imap.host} onChange={(event) => update('imap.host',event.target.value)} /></label><label>IMAP port<input type="number" value={connection.imap.port} onChange={(event) => update('imap.port',event.target.value)} /></label></div><div className="form-grid"><label>SMTP host<input placeholder="smtp.example.com" value={connection.smtp.host} onChange={(event) => update('smtp.host',event.target.value)} /></label><label>SMTP port<input type="number" value={connection.smtp.port} onChange={(event) => update('smtp.port',event.target.value)} /></label></div><button className="primary" disabled={busy} onClick={() => void connect()}>Test and connect email</button></div> : <button className="secondary" disabled={busy} onClick={() => void sync()}>Sync incoming mail now</button>}</section>{configured && <><section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">INBOX</p><h2>Incoming messages</h2></div></div>{messages.length === 0 ? <Empty title="No synced messages yet" detail="Use Sync incoming mail now to check the mailbox." /> : <div className="email-list">{messages.map((message) => <article key={message.id} className={message.unread ? 'email-unread' : ''}><strong>{message.subject}</strong><small>{message.fromName || message.from} · {formatWhen(message.receivedAt)}</small><p>{message.text.slice(0,240)}</p>{matched(message) && <span className="pill pill-approved">Matched to {matched(message)?.name}</span>}</article>)}</div>}</section><section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">SEND</p><h2>Compose message</h2></div></div><label>To<input type="email" value={compose.to} onChange={(event) => setCompose({...compose,to:event.target.value})} /></label><label>Subject<input value={compose.subject} onChange={(event) => setCompose({...compose,subject:event.target.value})} /></label><label>Message<textarea rows={6} value={compose.text} onChange={(event) => setCompose({...compose,text:event.target.value})} /></label><button className="primary" disabled={busy} onClick={() => void send()}>Send email</button></section></>}</div>;
 }
 
 function SettingsView({ theme, setTheme, migratePreviousData }: { theme: Theme; setTheme: (theme: Theme) => void; migratePreviousData: () => void }) {
