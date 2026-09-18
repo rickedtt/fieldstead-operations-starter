@@ -54,6 +54,18 @@ async function writeConfig(config) {
   await fs.writeFile(configPath(), JSON.stringify(config), { mode: 0o600 });
 }
 
+function describeMailError(error) {
+  if (!error) return 'Unknown mail-server error.';
+  const parts = [
+    error.message,
+    error.code,
+    error.responseStatus,
+    error.responseText,
+    error.authenticationFailed ? 'authentication failed' : '',
+  ].filter(Boolean).map(String);
+  return [...new Set(parts)].join(' — ') || String(error);
+}
+
 function normalizeInput(input) {
   const clean = (value) => String(value ?? '').trim();
   const port = (value, fallback) => Number.parseInt(String(value ?? fallback), 10);
@@ -86,7 +98,7 @@ async function testImap(config) {
   try {
     await client.connect();
   } catch (error) {
-    throw new Error(`IMAP connection failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`IMAP connection failed: ${describeMailError(error)}`);
   } finally {
     try { await client.close(); } catch {}
   }
@@ -103,7 +115,7 @@ async function testSmtp(config) {
   try {
     await transporter.verify();
   } catch (error) {
-    throw new Error(`SMTP connection failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`SMTP connection failed: ${describeMailError(error)}`);
   } finally {
     transporter.close();
   }
@@ -175,7 +187,7 @@ export async function syncEmail() {
       return { ok: true, messages: messages.reverse(), syncedAt: new Date().toISOString() };
     } finally { lock.release(); }
   } catch (error) {
-    throw new Error(`Inbox sync failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Inbox sync failed: ${describeMailError(error)}`);
   } finally { try { await client.close(); } catch {} }
 }
 
@@ -191,6 +203,6 @@ export async function sendEmail(input) {
     const result = await transporter.sendMail({ from: { name: config.displayName || config.email, address: config.email }, to, subject, text });
     return { ok: true, messageId: result.messageId };
   } catch (error) {
-    throw new Error(`Email send failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Email send failed: ${describeMailError(error)}`);
   } finally { transporter.close(); }
 }
