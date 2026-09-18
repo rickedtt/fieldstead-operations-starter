@@ -3,7 +3,7 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen, session } from 'electron';
 import updater from 'electron-updater';
 const { autoUpdater } = updater;
 import {
@@ -153,11 +153,14 @@ function lockRendererToLoopback(serverUrl) {
 }
 
 function createWindow(serverUrl) {
+  const workArea = screen.getPrimaryDisplay().workAreaSize;
+  const width = Math.min(1440, Math.max(800, workArea.width - 24));
+  const height = Math.min(940, Math.max(600, workArea.height - 24));
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 940,
-    minWidth: 1024,
-    minHeight: 700,
+    width,
+    height,
+    minWidth: Math.min(1024, width),
+    minHeight: Math.min(700, height),
     show: false,
     title: PRODUCT_NAME,
     autoHideMenuBar: true,
