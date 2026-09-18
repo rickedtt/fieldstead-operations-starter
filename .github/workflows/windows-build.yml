@@ -1,0 +1,39 @@
+name: Build Windows desktop artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare bundled production server
+        run: npm run desktop:prepare-server
+
+      - name: Build Windows installer and portable executable
+        run: npx electron-builder --publish never --win nsis portable --x64
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fieldstead-windows-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            release/*Portable*.exe
+            release/*Setup*.exe
+            release/*.yml
