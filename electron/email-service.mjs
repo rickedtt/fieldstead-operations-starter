@@ -85,10 +85,10 @@ async function testImap(config) {
   });
   try {
     await client.connect();
-    await client.logout();
   } catch (error) {
-    try { await client.close(); } catch {}
     throw new Error(`IMAP connection failed: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    try { await client.close(); } catch {}
   }
 }
 
@@ -176,7 +176,7 @@ export async function syncEmail() {
     } finally { lock.release(); }
   } catch (error) {
     throw new Error(`Inbox sync failed: ${error instanceof Error ? error.message : String(error)}`);
-  } finally { try { await client.logout(); } catch {} }
+  } finally { try { await client.close(); } catch {} }
 }
 
 export async function sendEmail(input) {
