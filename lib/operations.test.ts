@@ -34,6 +34,12 @@ describe('central operations flows', () => {
     expect(state.activity.slice(0, 2).map((event) => event.action)).toEqual(['Schedule confirmed', 'Estimate approved']);
   });
 
+  it('flags approved work without a date for scheduling', () => {
+    const estimate = syntheticDemoState.jobs.find((job) => job.quoteStatus === 'Sent')!;
+    const approved = setQuoteStatus(structuredClone(syntheticDemoState), estimate.id, 'Approved', '2026-08-30T10:00:00-05:00').jobs.find((job) => job.id === estimate.id)!;
+    expect(nextAction(approved)).toMatchObject({ label:'Schedule job', priority:'high' });
+  });
+
   it('marks an invoice paid and clears the next action', () => {
     const overdue = syntheticDemoState.jobs.find((job) => job.invoiceStatus === 'Overdue')!;
     const state = setInvoiceStatus(structuredClone(syntheticDemoState), overdue.id, 'Paid', '2026-08-30T12:00:00-05:00');

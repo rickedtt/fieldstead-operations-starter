@@ -66,6 +66,7 @@ export const statusOrder: JobStatus[] = ['Quoted','Scheduled','En route','In pro
 export function nextAction(job: Job) {
   if (job.quoteStatus === 'Draft') return { label:'Send quote', reason:'Quote is ready for review', priority:'high' as const };
   if (job.quoteStatus === 'Sent') return { label:'Follow up on quote', reason:'Customer decision is pending', priority:'high' as const };
+  if (job.quoteStatus === 'Approved' && !job.scheduledFor) return { label:'Schedule job', reason:'Approved work has no date or crew handoff yet', priority:'high' as const };
   if (job.status === 'Scheduled') return { label:'Start route handoff', reason:'Crew and timing should be confirmed', priority:'normal' as const };
   if (job.status === 'En route') return { label:'Mark in progress', reason:'Crew is heading to the job', priority:'normal' as const };
   if (job.status === 'In progress') return { label:'Complete job', reason:'Finish field work and create invoice', priority:'normal' as const };

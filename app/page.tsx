@@ -25,7 +25,7 @@ type EmailAccount = { id: string; email: string; displayName?: string; provider?
 const EMPTY_EMAIL_SETUP: EmailSetup = { businessEmail: '', displayName: '', provider: 'Choose later', purpose: 'Customer communications' };
 
 const UPDATE_CHANGELOG = [
-  { version: 'Current', date: 'September 16, 2026', detail: 'Fixed desktop startup and GitHub updater loading so the program opens normally.' },
+  { version: 'Current', date: 'September 20, 2026', detail: 'Synchronized the Operations Starter scope across the program: clearer office workflow, scheduling attention, daily follow-up, reporting, activity history, and explicit add-on boundaries.' },
   { version: 'Previous', date: 'September 16, 2026', detail: 'Added GitHub release updates, customer removal, an empty starting workspace, and simplified Overview branding.' },
   { version: 'Previous', date: 'September 16, 2026', detail: 'Replaced generic branding with the Fieldstead Systems logo and added the Omarchy application launcher.' },
 ] as const;
@@ -225,7 +225,7 @@ export default function Home() {
           {view !== 'Settings' && <div className="header-actions"><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></div>}
         </header>
 
-        <div className="dogfood-banner" role="note"><span>Confirmed Fieldstead records only · no customer messages, invoices, or payments are sent.</span></div>
+        <div className="dogfood-banner" role="note"><span>Starter workflow: office-first visibility for customers, jobs, schedules, follow-up, and payment status. No customer messages, invoices, or payments are sent.</span></div>
 
         <div className="content">
           {view === 'Overview' && <Overview state={state} approvedPipeline={approvedPipeline} unpaid={unpaid} attention={needsAttention} openJob={(id) => setSelectedJobId(id)} goToJobs={goToJobs} />}
@@ -354,6 +354,7 @@ function Overview({ state, approvedPipeline, unpaid, attention, openJob, goToJob
   const unscheduled = state.jobs.filter((job) => job.quoteStatus === 'Approved' && !job.scheduledFor).length;
   return <>
     <section className="value-strip"><div><span className="value-icon">✓</span><p><strong>Nothing gets lost after “yes.”</strong><br/>Estimates, owner handoffs, and payment follow-up stay visible in one place.</p></div><span>Confirmed records only</span></section>
+    <section className="starter-scope-card" aria-label="Operations Starter scope"><div><p className="eyebrow">OPERATIONS STARTER</p><h2>One dependable office workflow</h2><p>Customers, service requests, jobs, statuses, basic schedule visibility, estimate follow-up, invoice/payment-status follow-up, daily attention, and practical summaries.</p></div><ul><li>Discovery and workflow mapping</li><li>Customer and contact records</li><li>Job and service-request tracking</li><li>Training, handoff, and recovery plan</li></ul></section>
     <section className="metric-grid" aria-label="Operations summary">
       <article><p>Open jobs</p><strong>{state.jobs.filter((job) => !['Completed','Canceled'].includes(job.status)).length}</strong><small>{unscheduled ? `${unscheduled} approved, not scheduled` : 'All approved work is scheduled'}</small></article>
       <article><p>Approved pipeline</p><strong>{money.format(approvedPipeline)}</strong><small>Scheduled and active work</small></article>

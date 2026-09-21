@@ -23,10 +23,24 @@ Open the local URL printed by the development server. Browser job changes are st
 4. Change the invoice state to **Sent** or **Paid**. This updates bookkeeping visibility only; it does not create an invoice, payment link, charge, email, or text message.
 5. Open **Client Delivery**. Download a versioned JSON backup and restore it to rehearse recovery. The bundled synthetic CSV is an explicitly labeled test fixture and is not part of the live Fieldstead workspace.
 
+## Current Operations Starter contract
+
+The program now follows the synchronized Starter definition used by the website and owner PDF:
+
+- Discovery and workflow mapping.
+- Customer and contact records with phone, email, service address, notes, and linked jobs.
+- Job and service-request tracking with defined statuses.
+- Basic schedule visibility, including approved work that still needs a date or crew handoff.
+- Estimate and quote follow-up through draft, sent, approved, and declined states.
+- Invoice and payment-status visibility as manual bookkeeping labels only.
+- Daily attention and follow-up list for callbacks, estimates, scheduling, unfinished work, and payment status.
+- Basic operational summaries, activity and decision history, configuration, training, handoff, and recovery planning.
+
 ## What works in this dogfood build
 
 - Local-first job persistence in IndexedDB, including close-and-reopen behavior and optimistic updates with a pending outbox.
 - Synthetic customer and job records; estimate follow-up; schedule, crew, and job-status visibility; invoice and payment-state visibility.
+- Approved unscheduled work is surfaced as a high-priority **Schedule job** action.
 - Append-only activity for workflow changes passed through job mutations.
 - Explicitly confirmed synthetic CSV staging with duplicate, missing-field, and invalid-row reporting.
 - Versioned JSON export and recovery for the complete in-app operations state.
