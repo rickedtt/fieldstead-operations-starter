@@ -8,6 +8,14 @@ import { clearEmailConfig, emailMessageAction, getEmailAccounts, getEmailConfig,
 import updater from 'electron-updater';
 const { autoUpdater } = updater;
 
+autoUpdater.setFeedURL({
+  provider: 'github',
+  owner: 'rickedtt',
+  repo: 'fieldstead-operations-starter',
+  private: false,
+  releaseType: 'release',
+});
+
 // Use Omarchy's GNOME keyring for Electron safeStorage.
 app.commandLine.appendSwitch('password-store', 'gnome-libsecret');
 import {
