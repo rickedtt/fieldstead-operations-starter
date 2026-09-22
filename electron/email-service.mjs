@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { app, safeStorage } from 'electron';
-import { normalizeMailProvider, getMailProviderProfile } from '../lib/mail-provider.ts';
+import { normalizeMailProvider, getMailProviderProfile } from '../lib/mail-provider-runtime.mjs';
 
 const CONFIG_FILE = 'email-connection.json';
 
