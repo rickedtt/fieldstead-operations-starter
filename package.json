@@ -22,7 +22,7 @@
     "test:watch": "vitest --config vitest.config.ts",
     "desktop:dist:portable": "npm run desktop:prepare-server && npm run package:validate && electron-builder --win portable --x64",
     "desktop:publish:hq": "npm run desktop:dist:portable && node scripts/publish-windows-demo-to-hq.mjs",
-    "desktop:prepare-server": "npm run build && npm install --omit=dev --prefix dist/standalone vinext@1.0.0-beta.3",
+    "desktop:prepare-server": "npm run build && npm install --omit=dev --prefix dist/standalone react@19.2.6 react-dom@19.2.6 vinext@1.0.0-beta.3",
     "desktop:dist:all": "npm run desktop:prepare-server && electron-builder --linux AppImage --win portable nsis --x64"
   },
   "dependencies": {

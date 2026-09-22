@@ -30,6 +30,7 @@ jobs:
         with:
           name: linux-release
           path: release/*.AppImage
+          if-no-files-found: error
 
   windows:
     runs-on: windows-latest
