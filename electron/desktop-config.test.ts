@@ -61,4 +61,8 @@ describe('electron-builder metadata', () => {
       filter: ['**/*'],
     });
   });
+
+  it('packages the mail provider runtime at the path imported by Electron', () => {
+    expect(packageJson.build.files).toContain('lib/mail-provider-runtime.mjs');
+  });
 });

@@ -72,6 +72,7 @@
     },
     "files": [
       "electron/**/*",
+      "lib/mail-provider-runtime.mjs",
       "package.json",
       "!electron/**/*.test.*",
       "!node_modules/**/*",
