@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { app, safeStorage } from 'electron';
+import { normalizeMailProvider, getMailProviderProfile } from '../lib/mail-provider.ts';
 
 const CONFIG_FILE = 'email-connection.json';
 
@@ -83,14 +84,19 @@ function normalizeInput(input) {
   const clean = (value) => String(value ?? '').trim();
   const port = (value, fallback) => Number.parseInt(String(value ?? fallback), 10);
   const result = {
-    provider: clean(input.provider) || 'Custom IMAP/SMTP',
+    provider: normalizeMailProvider(input.provider, input.email),
     email: clean(input.email),
     displayName: clean(input.displayName),
     imap: { host: clean(input.imap?.host), port: port(input.imap?.port, 993), secure: input.imap?.secure !== false },
     smtp: { host: clean(input.smtp?.host), port: port(input.smtp?.port, 465), secure: input.smtp?.secure !== false },
     username: clean(input.username),
-    password: String(input.password ?? ''),
+    password: String(input.password ?? '').replace(/\s+/g, ''),
   };
+  if (result.provider !== 'unknown') {
+    const profile = getMailProviderProfile(result.provider);
+    result.imap = { ...profile.imap };
+    result.smtp = { ...profile.smtp };
+  }
   if (!result.email || !result.username || !result.password || !result.imap.host || !result.smtp.host) {
     throw new Error('Email address, username, password, IMAP host, and SMTP host are required.');
   }

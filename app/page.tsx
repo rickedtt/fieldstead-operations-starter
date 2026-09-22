@@ -269,7 +269,7 @@ function EmailView({ state }: { state: OperationsState }) {
   useEffect(() => { let cancelled = false; void window.fieldsteadDesktop?.getEmailAccounts().then((result) => { if (cancelled || !result) return; setAccounts(result.accounts || []); setActiveAccountId(result.activeAccountId || result.accounts?.[0]?.id || null); if (result.accounts?.length) setStatus(`Connected as ${result.accounts.find((account) => account.id === result.activeAccountId)?.email || result.accounts[0].email}.`); }); return () => { cancelled = true; }; }, []);
   function selectProvider(provider: string) {
     const profile = getMailProviderProfile(provider);
-    setConnection((current) => ({ ...current, provider: profile.name, imap: profile.imap, smtp: profile.smtp }));
+    setConnection((current) => ({ ...current, provider: profile.id, imap: profile.imap, smtp: profile.smtp }));
     setStatus(provider === 'unknown' ? 'Choose your provider or enter the server settings supplied by your mail host.' : `${profile.name} settings loaded. Choose secure sign-in details to continue.`);
   }
   function updateEmail(value: string) {

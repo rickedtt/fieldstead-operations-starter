@@ -24,3 +24,13 @@ export function getMailProviderProfile(provider) {
   const profile = PROFILES[provider] || PROFILES.unknown;
   return structuredClone(profile);
 }
+
+export function normalizeMailProvider(provider, email = '') {
+  const value = String(provider || '').trim().toLowerCase();
+  if (value === 'google' || value === 'gmail' || value.includes('google') || value.includes('gmail')) return 'google';
+  if (value === 'microsoft' || value.includes('microsoft') || value.includes('outlook')) return 'microsoft';
+  if (value === 'yahoo' || value.includes('yahoo')) return 'yahoo';
+  if (value === 'icloud' || value.includes('icloud')) return 'icloud';
+  if (value === 'zoho' || value.includes('zoho')) return 'zoho';
+  return detectMailProvider(email);
+}
