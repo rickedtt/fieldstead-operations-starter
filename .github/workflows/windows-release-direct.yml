@@ -58,4 +58,8 @@ jobs:
         run: |
           gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 || \
             gh release create "$TAG" --repo "$REPO" --title "Fieldstead Systems Operations Starter $TAG" --notes "Windows release for $TAG."
-          gh release upload "$TAG" release/*Portable*.exe release/*Setup*.exe release/*.yml --repo "$REPO" --clobber
+          for asset in release/*Portable*.exe release/*Setup*.exe release/*.yml; do
+            name=$(basename "$asset")
+            gh release delete-asset "$TAG" "$name" --repo "$REPO" --yes 2>/dev/null || true
+            gh release upload "$TAG" "$asset" --repo "$REPO"
+          done
