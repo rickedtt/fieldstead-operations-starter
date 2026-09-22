@@ -61,5 +61,5 @@ jobs:
           for asset in release/*Portable*.exe release/*Setup*.exe release/*.yml; do
             name=$(basename "$asset")
             gh release delete-asset "$TAG" "$name" --repo "$REPO" --yes 2>/dev/null || true
-            gh release upload "$TAG" "$asset" --repo "$REPO"
+            gh release upload "$TAG" "$asset" --repo "$REPO" --clobber
           done
