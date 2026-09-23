@@ -10,11 +10,8 @@ import updater from 'electron-updater';
 const { autoUpdater } = updater;
 
 autoUpdater.setFeedURL({
-  provider: 'github',
-  owner: 'rickedtt',
-  repo: 'fieldstead-operations-starter',
-  private: false,
-  releaseType: 'release',
+  provider: 'generic',
+  url: 'https://github.com/rickedtt/fieldstead-operations-starter/releases/download/v0.2.35/',
 });
 
 // Use Omarchy's GNOME keyring for Electron safeStorage.
