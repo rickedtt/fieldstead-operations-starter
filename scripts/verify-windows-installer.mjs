@@ -52,8 +52,12 @@ export async function validateWindowsInstallerArtifacts({ packageJson, releaseDi
   if (metadata && !new RegExp(`^version:\\s*["']?${packageJson.version.replaceAll('.', '\\.')}`, 'm').test(metadata)) {
     failures.push(`latest.yml must declare package version ${packageJson.version}.`);
   }
-  if (metadata && !metadata.includes(installerName) && !metadata.includes(installerName.replaceAll(' ', '%20'))) {
-    failures.push(`latest.yml must reference the primary installer ${installerName}.`);
+  if (metadata) {
+    const normalizedMetadata = metadata.replaceAll('%20', ' ').replaceAll('\\', '/');
+    const normalizedInstallerName = installerName.replaceAll('\\', '/');
+    if (!normalizedMetadata.includes(normalizedInstallerName)) {
+      failures.push(`latest.yml must reference the primary installer ${installerName}.`);
+    }
   }
 
   return { installerName, failures };
