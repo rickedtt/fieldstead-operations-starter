@@ -29,7 +29,8 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        timeout-minutes: 8
+        run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Validate tag matches package version
         shell: bash
@@ -49,19 +50,14 @@ jobs:
       - name: Verify primary Windows installer
         run: npm run installer:verify
 
-      - name: Build portable diagnostic fallback
-        run: npx electron-builder --publish never --win portable --x64
-
-      - name: Verify Windows artifacts
+      - name: Verify Windows installer artifact
         shell: pwsh
         run: |
-          $artifacts = @(Get-ChildItem release -Filter *.exe)
-          if ($artifacts.Count -lt 2) { throw 'Expected the NSIS installer and portable diagnostic fallback.' }
-          foreach ($artifact in $artifacts) {
-            $bytes = [System.IO.File]::ReadAllBytes($artifact.FullName)
-            if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "$($artifact.Name) is not a Windows PE file." }
-            Get-FileHash $artifact.FullName -Algorithm SHA256
-          }
+          $artifacts = @(Get-ChildItem release -Filter *Setup*.exe)
+          if ($artifacts.Count -ne 1) { throw 'Expected exactly one NSIS setup installer.' }
+          $bytes = [System.IO.File]::ReadAllBytes($artifacts[0].FullName)
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "$($artifacts[0].Name) is not a Windows PE file." }
+          Get-FileHash $artifacts[0].FullName -Algorithm SHA256
 
       - name: Create or update private GitHub release
         env:
@@ -72,7 +68,7 @@ jobs:
         run: |
           gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 || \
             gh release create "$TAG" --repo "$REPO" --title "Fieldstead Systems Operations Starter $TAG" --notes "Windows release for $TAG."
-          for asset in release/*Portable*.exe release/*Setup*.exe release/*.yml; do
+          for asset in release/*Setup*.exe release/*.yml; do
             name=$(basename "$asset")
             gh release delete-asset "$TAG" "$name" --repo "$REPO" --yes 2>/dev/null || true
             gh release upload "$TAG" "$asset" --repo "$REPO" --clobber
