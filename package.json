@@ -1,6 +1,6 @@
 {
   "name": "fieldstead-operations-starter",
-  "version": "0.2.41",
+  "version": "0.2.42",
   "private": true,
   "description": "Fieldstead Systems internal Operations Starter dogfood system.",
   "author": "Fieldstead Systems",
@@ -185,6 +185,18 @@
       "repo": "fieldstead-operations-starter",
       "releaseType": "release",
       "private": false
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Fieldstead.Systems.Operations.Starter-${version}-${arch}.${ext}"
     }
   }
 }

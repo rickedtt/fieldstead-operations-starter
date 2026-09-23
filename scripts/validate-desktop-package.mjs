@@ -17,6 +17,7 @@ requireValue(packageJson.main === 'electron/main.mjs', 'package main must be ele
 requireValue(packageJson.build?.appId === APP_ID, `build.appId must be ${APP_ID}`);
 requireValue(packageJson.build?.productName === PRODUCT_NAME, `build.productName must be ${PRODUCT_NAME}`);
 requireValue(packageJson.build?.win?.icon === 'build/icon.ico', 'Windows icon must be build/icon.ico');
+requireValue(packageJson.build?.linux?.icon === 'build/icon.png', 'Linux icon must be build/icon.png');
 requireValue(packageLock.version === packageJson.version, 'package-lock.json version must match package.json');
 requireValue(packageLock.packages?.['']?.version === packageJson.version, 'package-lock root version must match package.json');
 requireValue(
@@ -47,6 +48,7 @@ for (const relativePath of [
   'electron/setup-store.mjs',
   'lib/mail-provider-runtime.mjs',
   'build/icon.ico',
+  'build/icon.png',
   'public/assets/fieldstead-systems-refined.svg',
 ]) {
   try {

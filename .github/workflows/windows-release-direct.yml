@@ -6,9 +6,6 @@ on:
       tag:
         description: 'Existing release tag to build and publish'
         required: true
-  push:
-    tags:
-      - 'v*'
 
 permissions:
   contents: write

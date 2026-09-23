@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to build'
+        description: Release tag to build
         required: true
   push:
     tags:
@@ -16,20 +16,32 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --prefer-offline --no-audit --no-fund
+        timeout-minutes: 8
       - name: Validate tag matches package version
-        shell: bash
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: node -e "const p=require('./package.json'); if(process.env.TAG !== 'v'+p.version) throw new Error('Release tag must be v'+p.version)"
       - run: npm run desktop:prepare-server
+        timeout-minutes: 12
+      - run: npm run package:validate
       - run: npx electron-builder --publish never --linux AppImage --x64
+        timeout-minutes: 12
+      - name: Verify Linux AppImage artifact
+        run: |
+          mapfile -t artifacts < <(find release -maxdepth 1 -type f -name '*.AppImage')
+          test "${#artifacts[@]}" -eq 1
+          test "$(head -c 4 "${artifacts[0]}" | od -An -tx1 | tr -d ' \n')" = '7f454c46'
+          sha256sum "${artifacts[0]}"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-release
@@ -38,41 +50,60 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --prefer-offline --no-audit --no-fund
+        timeout-minutes: 8
+      - name: Validate tag matches package version
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: node -e "const p=require('./package.json'); if(process.env.TAG !== 'v'+p.version) throw new Error('Release tag must be v'+p.version)"
       - run: npm run desktop:prepare-server
+        timeout-minutes: 12
       - run: npm run package:validate
       - run: npx electron-builder --publish never --win nsis --x64
+        timeout-minutes: 12
       - run: npm run installer:verify
-      - run: npx electron-builder --publish never --win portable --x64
+      - name: Verify Windows installer artifact
+        shell: pwsh
+        run: |
+          $artifacts = @(Get-ChildItem release -Filter *Setup*.exe)
+          if ($artifacts.Count -ne 1) { throw 'Expected exactly one NSIS setup installer.' }
+          $bytes = [System.IO.File]::ReadAllBytes($artifacts[0].FullName)
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "$($artifacts[0].Name) is not a Windows PE file." }
+          Get-FileHash $artifacts[0].FullName -Algorithm SHA256
       - uses: actions/upload-artifact@v4
         with:
           name: windows-release
           path: |
-            release/*Portable*.exe
             release/*Setup*.exe
             release/*.yml
+          if-no-files-found: error
 
   publish:
     needs: [linux, windows]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
-      - name: Publish private GitHub release
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
-          find release-assets -type f -print
-          gh release create "$TAG" release-assets/linux-release/* release-assets/windows-release/* \
-            --repo "$REPO" \
-            --title "Fieldstead Systems Operations Starter $TAG" \
-            --generate-notes
+          gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "$REPO" --title "Fieldstead Systems Operations Starter $TAG" --generate-notes
+          find release-assets -type f -print0 | while IFS= read -r -d '' asset; do
+            gh release upload "$TAG" "$asset" --repo "$REPO" --clobber
+          done

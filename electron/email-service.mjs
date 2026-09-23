@@ -5,8 +5,16 @@ import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { app, safeStorage } from 'electron';
 import { normalizeMailProvider, getMailProviderProfile } from '../lib/mail-provider-runtime.mjs';
+import { createAttachmentStore } from './attachment-store.mjs';
+import { parseMailContent } from './mail-content.mjs';
+import { performEmailMessageAction } from './email-message-actions.mjs';
 
 const CONFIG_FILE = 'email-connection.json';
+const ATTACHMENT_DIRECTORY = 'email-attachments';
+
+function attachmentStore() {
+  return createAttachmentStore(path.join(app.getPath('userData'), ATTACHMENT_DIRECTORY));
+}
 
 function configPath() {
   return path.join(app.getPath('userData'), CONFIG_FILE);
@@ -204,15 +212,28 @@ export async function syncEmail(accountId) {
     try {
       const messages = [];
       const start = Math.max(1, (client.mailbox.exists || 0) - 24);
-      for await (const message of client.fetch(`${start}:*`, { uid: true, envelope: true, source: true })) {
-        const parsed = await (await import('mailparser')).simpleParser(message.source);
+      for await (const message of client.fetch(`${start}:*`, { uid: true, envelope: true, source: true, flags: true })) {
+        let parsed;
+        try { parsed = await (await import('mailparser')).simpleParser(message.source); }
+        catch { parsed = undefined; }
+        const content = parseMailContent(parsed);
+        const id = String(message.uid);
+        try {
+          const cached = await attachmentStore().cacheMessage(config.id, id, content.files);
+          const availability = new Map(cached.map((attachment) => [attachment.id, attachment.available]));
+          content.attachments = content.attachments.map((attachment) => ({ ...attachment, available: availability.get(attachment.id) === true }));
+        } catch {
+          content.attachments = content.attachments.map((attachment) => ({ ...attachment, available: false }));
+        }
         messages.push({
-          id: String(message.uid),
+          id,
           subject: message.envelope?.subject || '(no subject)',
           from: message.envelope?.from?.[0]?.address || '',
           fromName: message.envelope?.from?.[0]?.name || '',
           receivedAt: message.envelope?.date?.toISOString?.() || new Date().toISOString(),
-          text: parsed.text?.slice(0, 20000) || '',
+          text: content.text.slice(0, 20000),
+          inlineImages: content.inlineImages,
+          attachments: content.attachments,
           unread: !message.flags?.has?.('\\Seen'),
           starred: message.flags?.has?.('\\Flagged') || false,
         });
@@ -224,28 +245,31 @@ export async function syncEmail(accountId) {
   } finally { try { await client.close(); } catch {} }
 }
 
+export async function getEmailAttachmentMetadata(accountId, messageId, attachmentId) {
+  const { account } = await getAccount(accountId);
+  const { item } = await attachmentStore().metadata(account.id, messageId, attachmentId);
+  return item;
+}
+
+export async function saveEmailAttachment(accountId, messageId, attachmentId, destination) {
+  const { account } = await getAccount(accountId);
+  return attachmentStore().save(account.id, messageId, attachmentId, destination);
+}
+
 export async function emailMessageAction(accountId, uid, action) {
   const config = await getStoredEmailSecrets(accountId);
   const client = new ImapFlow({ host: config.imap.host, port: config.imap.port, secure: config.imap.secure, auth: { user: config.username, pass: config.password }, logger: false });
-  const lock = await client.getMailboxLock('INBOX');
   try {
-    const range = String(uid);
-    if (action === 'read') await client.messageFlagsAdd(range, ['\\Seen']);
-    else if (action === 'unread') await client.messageFlagsRemove(range, ['\\Seen']);
-    else if (action === 'star') await client.messageFlagsAdd(range, ['\\Flagged']);
-    else if (action === 'unstar') await client.messageFlagsRemove(range, ['\\Flagged']);
-    else if (action === 'delete') await client.messageDelete(range);
-    else if (action === 'archive') {
-      const mailboxes = await client.list();
-      const archive = mailboxes.find((mailbox) => mailbox.specialUse === '\\All')?.path || mailboxes.find((mailbox) => /all mail|archive/i.test(mailbox.path))?.path;
-      if (!archive) throw new Error('This provider does not expose an archive mailbox.');
-      await client.messageMove(range, archive);
-    } else throw new Error(`Unsupported email action: ${action}`);
-    return { ok: true, action, uid: range };
+    await client.connect();
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      return await performEmailMessageAction(client, uid, action);
+    } finally {
+      lock.release();
+    }
   } catch (error) {
     throw new Error(`Email action failed: ${describeMailError(error)}`);
   } finally {
-    lock.release();
     try { await client.close(); } catch {}
   }
 }

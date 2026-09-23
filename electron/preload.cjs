@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld(
     syncEmail: (accountId) => ipcRenderer.invoke('fieldstead:email-sync', accountId),
     sendEmail: (input, accountId) => ipcRenderer.invoke('fieldstead:email-send', input, accountId),
     emailMessageAction: (accountId, uid, action) => ipcRenderer.invoke('fieldstead:email-action', accountId, uid, action),
+    saveEmailAttachment: (accountId, messageId, attachmentId) => ipcRenderer.invoke('fieldstead:email-attachment-save', accountId, messageId, attachmentId),
     getSetupState: () => ipcRenderer.invoke('fieldstead:setup-get'),
     saveSetupState: (state) => ipcRenderer.invoke('fieldstead:setup-save', state),
     checkForUpdates: () => ipcRenderer.invoke('fieldstead:check-for-updates'),

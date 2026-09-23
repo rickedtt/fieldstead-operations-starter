@@ -4,7 +4,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, screen, session } from 'electron';
-import { clearEmailConfig, emailMessageAction, getEmailAccounts, getEmailConfig, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
+import { clearEmailConfig, emailMessageAction, getEmailAccounts, getEmailAttachmentMetadata, getEmailConfig, saveEmailAttachment, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
 import { createSetupStore } from './setup-store.mjs';
 import updater from 'electron-updater';
 const { autoUpdater } = updater;
@@ -56,6 +56,22 @@ ipcMain.handle('fieldstead:email-clear', async (_event, accountId) => clearEmail
 ipcMain.handle('fieldstead:email-sync', async (_event, accountId) => { try { return await syncEmail(accountId); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
 ipcMain.handle('fieldstead:email-send', async (_event, input, accountId) => { try { return await sendEmail(input, accountId); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
 ipcMain.handle('fieldstead:email-action', async (_event, accountId, uid, action) => { try { return await emailMessageAction(accountId, uid, action); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
+ipcMain.handle('fieldstead:email-attachment-save', async (_event, accountId, messageId, attachmentId) => {
+  try {
+    const attachment = await getEmailAttachmentMetadata(accountId, messageId, attachmentId);
+    const choice = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save email attachment',
+      defaultPath: attachment.filename,
+      buttonLabel: 'Save',
+      properties: ['showOverwriteConfirmation', 'createDirectory'],
+    });
+    if (choice.canceled || !choice.filePath) return { ok: false, canceled: true };
+    const saved = await saveEmailAttachment(accountId, messageId, attachmentId, choice.filePath);
+    return { ok: true, filename: saved.filename, bytes: saved.bytes };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+});
 ipcMain.handle('fieldstead:setup-get', () => createSetupStore(app.getPath('userData')).load());
 ipcMain.handle('fieldstead:setup-save', (_event, state) => createSetupStore(app.getPath('userData')).save(state));
 
