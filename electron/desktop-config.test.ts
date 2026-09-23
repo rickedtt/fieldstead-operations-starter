@@ -57,7 +57,7 @@ describe('electron-builder metadata', () => {
 
   it('defines an assisted per-user installer that retains application data', () => {
     expect(packageJson.build.nsis).toMatchObject({
-      artifactName: '${productName}-Setup-${version}-${arch}.${ext}',
+      artifactName: 'Fieldstead.Systems.Operations.Starter-Setup-${version}-${arch}.${ext}',
       oneClick: false,
       perMachine: false,
       allowToChangeInstallationDirectory: true,

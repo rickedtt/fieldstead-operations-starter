@@ -1,6 +1,6 @@
 {
   "name": "fieldstead-operations-starter",
-  "version": "0.2.39",
+  "version": "0.2.40",
   "private": true,
   "description": "Fieldstead Systems internal Operations Starter dogfood system.",
   "author": "Fieldstead Systems",
@@ -166,7 +166,7 @@
       ]
     },
     "nsis": {
-      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "artifactName": "Fieldstead.Systems.Operations.Starter-Setup-${version}-${arch}.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
@@ -182,7 +182,7 @@
       "owner": "rickedtt",
       "repo": "fieldstead-operations-starter",
       "releaseType": "release",
-      "private": true
+      "private": false
     }
   }
 }

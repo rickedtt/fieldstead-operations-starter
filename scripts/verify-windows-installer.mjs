@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 export function expectedInstallerName(packageJson) {
-  return `${packageJson.build.productName}-Setup-${packageJson.version}-x64.exe`;
+  return `Fieldstead.Systems.Operations.Starter-Setup-${packageJson.version}-x64.exe`;
 }
 
 export function validatePackagedRuntimeEntries(entries) {
@@ -55,9 +55,7 @@ export async function validateWindowsInstallerArtifacts({ packageJson, releaseDi
   if (metadata) {
     const normalizedMetadata = metadata.replaceAll('%20', ' ').replaceAll('\\', '/');
     const normalizedInstallerName = installerName.replaceAll('\\', '/');
-    const hasInstallerReference = normalizedMetadata.includes(normalizedInstallerName) ||
-      normalizedMetadata.includes('Fieldstead Systems Operations Starter-Setup-' + packageJson.version + '-x64.exe') ||
-      /path:\s*.*Setup.*\.exe/i.test(normalizedMetadata);
+    const hasInstallerReference = normalizedMetadata.includes(normalizedInstallerName);
     if (!hasInstallerReference) {
       failures.push(`latest.yml must reference the primary installer ${installerName}.`);
     }

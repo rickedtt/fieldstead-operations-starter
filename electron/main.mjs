@@ -11,7 +11,8 @@ const { autoUpdater } = updater;
 
 autoUpdater.setFeedURL({
   provider: 'generic',
-  url: 'https://github.com/rickedtt/fieldstead-operations-starter/releases/download/v0.2.37/',
+  url: 'https://github.com/rickedtt/fieldstead-operations-starter/releases/latest/download/',
+  useMultipleRangeRequest: false,
 });
 
 // Use Omarchy's GNOME keyring for Electron safeStorage.

@@ -9,8 +9,6 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - main
 
 permissions:
   contents: write
@@ -60,16 +58,6 @@ jobs:
           $bytes = [System.IO.File]::ReadAllBytes($artifacts[0].FullName)
           if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "$($artifacts[0].Name) is not a Windows PE file." }
           Get-FileHash $artifacts[0].FullName -Algorithm SHA256
-
-      - name: Normalize updater metadata
-        shell: bash
-        run: node - <<'NODE'
-const fs = require('fs');
-const path = 'release/latest.yml';
-let s = fs.readFileSync(path, 'utf8');
-s = s.replace(/Fieldstead-Systems-Operations-Starter-Setup-/g, 'Fieldstead.Systems.Operations.Starter-Setup-');
-fs.writeFileSync(path, s);
-NODE
 
       - name: Create or update public GitHub release
         env:

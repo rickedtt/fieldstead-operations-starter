@@ -333,7 +333,7 @@ function SettingsView({ theme, setTheme, migratePreviousData, reopenSetup }: { t
       if (update.event === 'update-not-available') { setChecking(false); setStatus('This program is up to date.'); }
       if (update.event === 'update-downloaded') { setChecking(false); setDownloaded(true); setStatus('Update downloaded. Click Install update now to apply it.'); }
       if (update.event === 'download-progress') { setChecking(false); setStatus('Downloading update…'); }
-      if (update.event === 'error') { setChecking(false); setStatus('Private GitHub releases need authenticated update access on this device.'); }
+      if (update.event === 'error') { setChecking(false); setStatus(update.detail instanceof Error ? update.detail.message : String(update.detail || 'The update could not be downloaded.')); }
     });
     void window.fieldsteadDesktop?.checkForUpdates();
     return () => unsubscribe?.();
@@ -343,11 +343,12 @@ function SettingsView({ theme, setTheme, migratePreviousData, reopenSetup }: { t
     setStatus('Checking GitHub for updates…');
     const result = await window.fieldsteadDesktop?.checkForUpdates();
     if (result?.status === 'development') { setChecking(false); setStatus('Updates are available from the packaged desktop program.'); }
-    if (result?.status === 'error') { setChecking(false); setStatus('Private GitHub releases need authenticated update access on this device.'); }
+    if (result?.status === 'error') { setChecking(false); setStatus(result.message || 'The update could not be checked.'); }
   }
   async function download() {
     setStatus('Downloading update from GitHub…');
-    await window.fieldsteadDesktop?.downloadUpdate();
+    const result = await window.fieldsteadDesktop?.downloadUpdate();
+    if (result?.status === 'error') setStatus(result.message || 'The update could not be downloaded.');
   }
   async function install() {
     setStatus('Installing update and restarting the program…');
