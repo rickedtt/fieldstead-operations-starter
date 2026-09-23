@@ -43,14 +43,28 @@ describe('desktop loopback policy', () => {
 });
 
 describe('electron-builder metadata', () => {
-  it('defines the requested identity and both Windows x64 targets', () => {
+  it('defines the requested identity and makes NSIS the primary Windows target', () => {
     expect(packageJson.build.appId).toBe(APP_ID);
     expect(packageJson.build.productName).toBe(PRODUCT_NAME);
     expect(packageJson.build.win.icon).toBe('build/icon.ico');
     expect(packageJson.build.win.target).toEqual([
       { target: 'nsis', arch: ['x64'] },
-      { target: 'portable', arch: ['x64'] },
     ]);
+    expect(packageJson.scripts['desktop:dist:win']).toContain('--win nsis --x64');
+    expect(packageJson.scripts['desktop:dist:win']).not.toContain('portable');
+    expect(packageJson.scripts['desktop:dist:portable']).toContain('--win portable --x64');
+  });
+
+  it('defines an assisted per-user installer that retains application data', () => {
+    expect(packageJson.build.nsis).toMatchObject({
+      artifactName: '${productName}-Setup-${version}-${arch}.${ext}',
+      oneClick: false,
+      perMachine: false,
+      allowToChangeInstallationDirectory: true,
+      createDesktopShortcut: true,
+      createStartMenuShortcut: true,
+      deleteAppDataOnUninstall: false,
+    });
   });
 
   it('packages the standalone server beside the Electron application', () => {

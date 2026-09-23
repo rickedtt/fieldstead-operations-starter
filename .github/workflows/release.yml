@@ -6,7 +6,6 @@ on:
       tag:
         description: 'Release tag to build'
         required: true
-        default: 'v0.2.8'
   push:
     tags:
       - 'v*'
@@ -24,6 +23,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Validate tag matches package version
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: node -e "const p=require('./package.json'); if(process.env.TAG !== 'v'+p.version) throw new Error('Release tag must be v'+p.version)"
       - run: npm run desktop:prepare-server
       - run: npx electron-builder --publish never --linux AppImage --x64
       - uses: actions/upload-artifact@v4
@@ -42,7 +46,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run desktop:prepare-server
-      - run: npx electron-builder --publish never --win portable nsis --x64
+      - run: npm run package:validate
+      - run: npx electron-builder --publish never --win nsis --x64
+      - run: npm run installer:verify
+      - run: npx electron-builder --publish never --win portable --x64
       - uses: actions/upload-artifact@v4
         with:
           name: windows-release

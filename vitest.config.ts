@@ -4,7 +4,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: [
-      'app/store/**/*.test.ts',
+      'app/**/*.test.ts',
+      'app/**/*.test.tsx',
       'electron/**/*.test.ts',
       'lib/**/*.test.ts',
       'packages/**/*.test.ts',

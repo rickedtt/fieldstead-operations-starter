@@ -1,0 +1,11 @@
+name = "fieldstead-operations-starter-sync"
+compatibility_date = "2026-09-16"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "fieldstead-operations-sync"
+database_id = "8fda86f1-3848-4204-aeb1-a8dfad326ad9"

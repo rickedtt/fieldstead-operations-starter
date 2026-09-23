@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, screen, session } from 'electron';
 import { clearEmailConfig, emailMessageAction, getEmailAccounts, getEmailConfig, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
+import { createSetupStore } from './setup-store.mjs';
 import updater from 'electron-updater';
 const { autoUpdater } = updater;
 
@@ -57,6 +58,8 @@ ipcMain.handle('fieldstead:email-clear', async (_event, accountId) => clearEmail
 ipcMain.handle('fieldstead:email-sync', async (_event, accountId) => { try { return await syncEmail(accountId); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
 ipcMain.handle('fieldstead:email-send', async (_event, input, accountId) => { try { return await sendEmail(input, accountId); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
 ipcMain.handle('fieldstead:email-action', async (_event, accountId, uid, action) => { try { return await emailMessageAction(accountId, uid, action); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
+ipcMain.handle('fieldstead:setup-get', () => createSetupStore(app.getPath('userData')).load());
+ipcMain.handle('fieldstead:setup-save', (_event, state) => createSetupStore(app.getPath('userData')).save(state));
 
 ipcMain.handle('fieldstead:check-for-updates', async () => {
   if (!app.isPackaged) return { status: 'development', message: 'Updates are checked from the packaged GitHub release.' };

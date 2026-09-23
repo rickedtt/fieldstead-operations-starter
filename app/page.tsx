@@ -15,14 +15,15 @@ import {
 import { useFieldsteadLocalJobs } from './store/fieldstead-local';
 import { detectMailProvider, getMailProviderProfile } from '../lib/mail-provider';
 import { forwardSubject, replySubject, type EmailMessageAction } from '../lib/mail-actions';
+import { SetupWizard } from './setup/SetupWizard';
+import { loadSetupState, persistSetupState } from './setup/setup-state';
+import type { SetupState } from './setup/setup-types';
 
 type View = 'Overview' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Email' | 'Settings';
 type Theme = 'dark' | 'light';
-type EmailSetup = { businessEmail: string; displayName: string; provider: string; purpose: string };
 type EmailConnectionInput = { provider: string; email: string; displayName: string; username: string; password: string; imap: { host: string; port: number; secure: boolean }; smtp: { host: string; port: number; secure: boolean } };
 type EmailMessage = { id: string; subject: string; from: string; fromName: string; receivedAt: string; text: string; unread: boolean; starred?: boolean };
 type EmailAccount = { id: string; email: string; displayName?: string; provider?: string; lastTestedAt?: string | null; configured?: boolean };
-const EMPTY_EMAIL_SETUP: EmailSetup = { businessEmail: '', displayName: '', provider: 'Choose later', purpose: 'Customer communications' };
 
 const UPDATE_CHANGELOG = [
   { version: 'Current', date: 'September 20, 2026', detail: 'Synchronized the Operations Starter scope across the program: clearer office workflow, scheduling attention, daily follow-up, reporting, activity history, and explicit add-on boundaries.' },
@@ -45,6 +46,8 @@ declare global {
       syncEmail: (accountId?: string) => Promise<{ ok: boolean; message?: string; messages?: EmailMessage[]; syncedAt?: string }>;
       sendEmail: (input: { to: string; subject: string; text: string }, accountId?: string) => Promise<{ ok: boolean; messageId?: string; message?: string }>;
       emailMessageAction: (accountId: string, uid: string, action: EmailMessageAction) => Promise<{ ok: boolean; action?: string; uid?: string; message?: string }>;
+      getSetupState: () => Promise<unknown>;
+      saveSetupState: (state: SetupState) => Promise<unknown>;
       onUpdateStatus: (callback: (status: { event: string; detail?: unknown }) => void) => () => void;
     };
   }
@@ -103,6 +106,18 @@ export default function Home() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>();
   const [modal, setModal] = useState<'job'|'customer'|null>(null);
   const [toast, setToast] = useState('');
+  const [setupState, setSetupState] = useState<SetupState | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadSetupState(window.fieldsteadDesktop, window.localStorage).then((loaded) => {
+      if (cancelled) return;
+      setSetupState(loaded);
+      setSetupOpen(loaded.status !== 'complete');
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelectedJobId(undefined); setSelectedCustomerId(undefined); setModal(null); } };
@@ -202,6 +217,15 @@ export default function Home() {
     void localJobs.replaceDemoJobs(next.jobs).catch(() => undefined);
   }
   function goToJobs(filter = 'All') { setStatusFilter(filter); setQuery(''); setView('Jobs'); }
+  async function saveSetup(next: SetupState) {
+    const saved = await persistSetupState(next, window.fieldsteadDesktop, window.localStorage);
+    setSetupState(saved);
+  }
+  function reopenSetup() {
+    if (!setupState) return;
+    setSetupState({ ...setupState, currentStep: 'review' });
+    setSetupOpen(true);
+  }
 
   return (
     <main className={cx('app-shell', `theme-${theme}`, sidebarCollapsed && 'sidebar-collapsed')}>
@@ -234,7 +258,7 @@ export default function Home() {
           {view === 'Activity' && <ActivityView state={state} openJob={setSelectedJobId} />}
           {view === 'Client Delivery' && <ClientDeliveryView state={state} applyImport={applyStagedImport} restore={restoreBackup} />}
           {view === 'Email' && <EmailView state={state} />}
-          {view === 'Settings' && <SettingsView theme={theme} setTheme={setTheme} migratePreviousData={() => void migratePreviousData()} />}
+          {view === 'Settings' && <SettingsView theme={theme} setTheme={setTheme} migratePreviousData={() => void migratePreviousData()} reopenSetup={reopenSetup} />}
         </div>
 
       </section>
@@ -243,6 +267,7 @@ export default function Home() {
       {selectedCustomer && <CustomerDrawer state={state} customer={selectedCustomer} close={() => setSelectedCustomerId(undefined)} openJob={(id) => { setSelectedCustomerId(undefined); setSelectedJobId(id); }} remove={() => removeCustomer(selectedCustomer.id)} />}
       {modal === 'job' && <NewJobModal state={state} close={() => setModal(null)} save={saveNewJob} />}
       {modal === 'customer' && <NewCustomerModal state={state} close={() => setModal(null)} save={(next) => { mutate(next,'Customer added'); setModal(null); }} />}
+      {setupOpen && setupState && <SetupWizard state={setupState} onChange={setSetupState} onSave={saveSetup} onClose={() => setSetupOpen(false)} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </main>
   );
@@ -296,16 +321,11 @@ function EmailView({ state }: { state: OperationsState }) {
     {configured && <><section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">INBOX</p><h2>Incoming messages</h2></div></div>{messages.length === 0 ? <Empty title="No synced messages yet" detail="Use Sync now to check the selected mailbox." /> : <div className="email-list">{messages.map((message) => <article key={message.id} className={cx('email-message-card', message.unread && 'email-unread')}><div className="email-message-head"><strong>{message.starred ? '★ ' : ''}{message.subject}</strong><small>{message.fromName || message.from} · {formatWhen(message.receivedAt)}</small></div><p>{message.text.slice(0,240)}</p>{matched(message) && <span className="pill pill-approved">Matched to {matched(message)?.name}</span>}<div className="email-message-actions"><button className="text-button" onClick={() => prepareReply(message)}>Reply</button><button className="text-button" onClick={() => prepareReply(message, true)}>Forward</button><button className="text-button" onClick={() => void messageAction(message, message.unread ? 'read' : 'unread')}>{message.unread ? 'Mark read' : 'Mark unread'}</button><button className="text-button" onClick={() => void messageAction(message, message.starred ? 'unstar' : 'star')}>{message.starred ? 'Unstar' : 'Star'}</button><button className="text-button" onClick={() => void messageAction(message, 'archive')}>Archive</button><button className="text-button danger-text" onClick={() => void messageAction(message, 'delete')}>Delete</button></div></article>)}</div>}</section><section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">SEND</p><h2>Compose message</h2></div></div><label>To<input type="email" value={compose.to} onChange={(event) => setCompose({...compose,to:event.target.value})} /></label><label>Subject<input value={compose.subject} onChange={(event) => setCompose({...compose,subject:event.target.value})} /></label><label>Message<textarea rows={6} value={compose.text} onChange={(event) => setCompose({...compose,text:event.target.value})} /></label><button className="primary" disabled={busy} onClick={() => void send()}>Send email</button></section></>}
   </div>;
 }
-function SettingsView({ theme, setTheme, migratePreviousData }: { theme: Theme; setTheme: (theme: Theme) => void; migratePreviousData: () => void }) {
+function SettingsView({ theme, setTheme, migratePreviousData, reopenSetup }: { theme: Theme; setTheme: (theme: Theme) => void; migratePreviousData: () => void; reopenSetup: () => void }) {
   const [status, setStatus] = useState('Checking GitHub for updates…');
   const [available, setAvailable] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [emailSetup, setEmailSetup] = useState<EmailSetup>(() => {
-    if (typeof window === 'undefined') return EMPTY_EMAIL_SETUP;
-    try { return { ...EMPTY_EMAIL_SETUP, ...JSON.parse(window.localStorage.getItem('fieldstead-email-setup') || '{}') }; } catch { return EMPTY_EMAIL_SETUP; }
-  });
-  const [emailSaved, setEmailSaved] = useState(false);
   useEffect(() => {
     const unsubscribe = window.fieldsteadDesktop?.onUpdateStatus((update) => {
       if (update.event === 'checking-for-update') { setChecking(true); setStatus('Checking GitHub for updates…'); }
@@ -325,11 +345,6 @@ function SettingsView({ theme, setTheme, migratePreviousData }: { theme: Theme; 
     if (result?.status === 'development') { setChecking(false); setStatus('Updates are available from the packaged desktop program.'); }
     if (result?.status === 'error') { setChecking(false); setStatus('Private GitHub releases need authenticated update access on this device.'); }
   }
-  function saveEmailSetup(event: FormEvent) {
-    event.preventDefault();
-    window.localStorage.setItem('fieldstead-email-setup', JSON.stringify(emailSetup));
-    setEmailSaved(true);
-  }
   async function download() {
     setStatus('Downloading update from GitHub…');
     await window.fieldsteadDesktop?.downloadUpdate();
@@ -340,9 +355,9 @@ function SettingsView({ theme, setTheme, migratePreviousData }: { theme: Theme; 
   }
   return <div className="settings-page">
     <div className="activity-intro"><p className="eyebrow">SETTINGS</p><h2>Fieldstead Systems</h2><p>Choose how the program looks. This preference is saved on this device and does not follow the operating system.</p></div>
+    <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">WORKSPACE SETUP</p><h2>First-run capabilities</h2></div><span className="pill pill-approved">4 capabilities</span></div><p className="settings-copy">Review business identity, email, sync / remote workspace, and backup / export setup. Only non-secret planning details are stored here.</p><button className="secondary" onClick={reopenSetup}>Reopen setup wizard</button></section>
     <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">LOCAL DATA</p><h2>Import previous data</h2></div></div><p className="settings-copy">Bring forward compatible local records from an earlier Fieldstead workspace.</p><button className="secondary" onClick={migratePreviousData}>Import previous local data</button></section>
     <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">APPEARANCE</p><h2>Display mode</h2></div><span className="pill pill-approved">{theme === 'dark' ? 'Dark' : 'Light'}</span></div><p className="settings-copy">Dark mode is the default. Light mode is available when you prefer a brighter workspace.</p><div className="theme-picker" role="group" aria-label="Display mode"><button className={theme === 'dark' ? 'primary' : 'secondary'} onClick={() => setTheme('dark')}>Dark mode</button><button className={theme === 'light' ? 'primary' : 'secondary'} onClick={() => setTheme('light')}>Light mode</button></div></section>
-    <section className="attention-card settings-card" aria-labelledby="email-communications-heading"><div className="section-title"><div><p className="eyebrow">EMAIL COMMUNICATIONS</p><h2 id="email-communications-heading">Business email setup</h2></div><span className="pill pill-pending">Optional</span></div><p className="settings-copy">Set up the opportunity to connect your business email later, without opening another window. These planning details stay on this device. Email sending is not connected yet.</p><form className="email-setup-form" onSubmit={saveEmailSetup}><div className="form-grid"><label>Business email<input name="businessEmail" type="email" value={emailSetup.businessEmail} onChange={(event) => { setEmailSetup({ ...emailSetup, businessEmail: event.target.value }); setEmailSaved(false); }} placeholder="you@yourbusiness.com"/></label><label>Display name<input name="displayName" value={emailSetup.displayName} onChange={(event) => { setEmailSetup({ ...emailSetup, displayName: event.target.value }); setEmailSaved(false); }} placeholder="Your business name"/></label></div><div className="form-grid"><label>Email provider<select name="provider" value={emailSetup.provider} onChange={(event) => { setEmailSetup({ ...emailSetup, provider: event.target.value }); setEmailSaved(false); }}><option>Choose later</option><option>Google Workspace / Gmail</option><option>Microsoft 365 / Outlook</option><option>Other provider</option></select></label><label>Intended use<select name="purpose" value={emailSetup.purpose} onChange={(event) => { setEmailSetup({ ...emailSetup, purpose: event.target.value }); setEmailSaved(false); }}><option>Customer communications</option><option>Inquiry replies</option><option>Internal office messages</option></select></label></div><div className="email-save-row"><button className="secondary" type="submit">Save email setup</button>{emailSaved && <span className="settings-status" role="status">Email setup saved on this device.</span>}</div></form><p className="settings-status">Do not enter passwords, app keys, tokens, or connection secrets here. A future connection step can be added when you are ready.</p></section>
     <section className="attention-card settings-card"><div className="section-title"><div><p className="eyebrow">GITHUB UPDATES</p><h2>Keep this program current</h2></div><span className="pill pill-approved">GitHub</span></div><p className="settings-copy">Check GitHub here and install a newer packaged Fieldstead release without manually reopening the program.</p><div className="update-actions"><button className="secondary" disabled={checking} onClick={() => void check()}>{checking ? 'Checking…' : 'Check for updates'}</button>{available && !downloaded && <button className="primary" onClick={() => void download()}>Update now</button>}{downloaded && <button className="primary" onClick={() => void install()}>Install update now</button>}</div><p className="settings-status" role="status">{status}</p><div className="change-log"><p className="eyebrow">CHANGE LOG</p>{UPDATE_CHANGELOG.map((entry) => <article key={`${entry.version}-${entry.detail}`}><div><strong>{entry.version}</strong><small>{entry.date}</small></div><p>{entry.detail}</p></article>)}</div></section>
   </div>;
 }

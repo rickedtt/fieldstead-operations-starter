@@ -6,7 +6,6 @@ on:
       tag:
         description: 'Existing release tag to build and publish'
         required: true
-        default: 'v0.2.25'
   push:
     tags:
       - 'v*'
@@ -32,17 +31,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate tag matches package version
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: node -e "const p=require('./package.json'); if(process.env.TAG !== 'v'+p.version) throw new Error('Release tag must be v'+p.version)"
+
       - name: Prepare bundled production server
         run: npm run desktop:prepare-server
 
-      - name: Build Windows installer and portable executable
-        run: npx electron-builder --publish never --win nsis portable --x64
+      - name: Validate package contract
+        run: npm run package:validate
+
+      - name: Build primary Windows installer
+        run: npx electron-builder --publish never --win nsis --x64
+
+      - name: Verify primary Windows installer
+        run: npm run installer:verify
+
+      - name: Build portable diagnostic fallback
+        run: npx electron-builder --publish never --win portable --x64
 
       - name: Verify Windows artifacts
         shell: pwsh
         run: |
           $artifacts = @(Get-ChildItem release -Filter *.exe)
-          if ($artifacts.Count -lt 2) { throw 'Expected both Windows EXE artifacts.' }
+          if ($artifacts.Count -lt 2) { throw 'Expected the NSIS installer and portable diagnostic fallback.' }
           foreach ($artifact in $artifacts) {
             $bytes = [System.IO.File]::ReadAllBytes($artifact.FullName)
             if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "$($artifact.Name) is not a Windows PE file." }

@@ -25,15 +25,30 @@ jobs:
       - name: Prepare bundled production server
         run: npm run desktop:prepare-server
 
-      - name: Build Windows installer and portable executable
-        run: npx electron-builder --publish never --win nsis portable --x64
+      - name: Validate package contract
+        run: npm run package:validate
+
+      - name: Build primary Windows installer
+        run: npx electron-builder --publish never --win nsis --x64
+
+      - name: Verify primary Windows installer
+        run: npm run installer:verify
+
+      - name: Build portable diagnostic fallback
+        run: npx electron-builder --publish never --win portable --x64
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: fieldstead-windows-${{ github.sha }}
+          name: fieldstead-windows-installer-${{ github.sha }}
           if-no-files-found: error
           path: |
-            release/*Portable*.exe
             release/*Setup*.exe
             release/*.yml
+
+      - name: Upload portable diagnostic fallback
+        uses: actions/upload-artifact@v4
+        with:
+          name: fieldstead-windows-portable-fallback-${{ github.sha }}
+          if-no-files-found: error
+          path: release/*Portable*.exe

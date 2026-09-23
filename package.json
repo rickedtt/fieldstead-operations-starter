@@ -1,6 +1,6 @@
 {
   "name": "fieldstead-operations-starter",
-  "version": "0.2.27",
+  "version": "0.2.34",
   "private": true,
   "description": "Fieldstead Systems internal Operations Starter dogfood system.",
   "author": "Fieldstead Systems",
@@ -14,16 +14,17 @@
     "start": "vinext start",
     "desktop:dev": "npm run build && electron .",
     "desktop:build": "npm run desktop:prepare-server && npm run package:validate && electron-builder --dir",
-    "desktop:dist:win": "npm run desktop:prepare-server && npm run package:validate && electron-builder --win nsis portable --x64",
+    "desktop:dist:win": "npm run desktop:prepare-server && npm run package:validate && electron-builder --win nsis --x64 && npm run installer:verify",
     "desktop:validate": "npm run package:validate",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern release --ignore-pattern .hermes-tmp",
     "package:validate": "node scripts/validate-desktop-package.mjs && npm pack --dry-run",
+    "installer:verify": "node scripts/verify-windows-installer.mjs",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "desktop:dist:portable": "npm run desktop:prepare-server && npm run package:validate && electron-builder --win portable --x64",
-    "desktop:publish:hq": "npm run desktop:dist:portable && node scripts/publish-windows-demo-to-hq.mjs",
+    "desktop:publish:hq": "npm run desktop:dist:win && electron-builder --win portable --x64 && node scripts/publish-windows-demo-to-hq.mjs",
     "desktop:prepare-server": "npm run build && node scripts/prepare-desktop-runtime.mjs && npm install --omit=dev --prefix dist/standalone react@19.2.6 react-dom@19.2.6 vinext@1.0.0-beta.3",
-    "desktop:dist:all": "npm run desktop:prepare-server && electron-builder --linux AppImage --win portable nsis --x64"
+    "desktop:dist:all": "npm run desktop:prepare-server && electron-builder --linux AppImage --win nsis --x64"
   },
   "dependencies": {
     "dexie": "^4.2.0",
@@ -161,12 +162,6 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
         }
       ]
     },
@@ -176,7 +171,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
     },
     "portable": {
       "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
