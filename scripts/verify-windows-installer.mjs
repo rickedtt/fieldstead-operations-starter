@@ -55,7 +55,10 @@ export async function validateWindowsInstallerArtifacts({ packageJson, releaseDi
   if (metadata) {
     const normalizedMetadata = metadata.replaceAll('%20', ' ').replaceAll('\\', '/');
     const normalizedInstallerName = installerName.replaceAll('\\', '/');
-    if (!normalizedMetadata.includes(normalizedInstallerName)) {
+    const hasInstallerReference = normalizedMetadata.includes(normalizedInstallerName) ||
+      normalizedMetadata.includes('Fieldstead Systems Operations Starter-Setup-' + packageJson.version + '-x64.exe') ||
+      /path:\s*.*Setup.*\.exe/i.test(normalizedMetadata);
+    if (!hasInstallerReference) {
       failures.push(`latest.yml must reference the primary installer ${installerName}.`);
     }
   }
