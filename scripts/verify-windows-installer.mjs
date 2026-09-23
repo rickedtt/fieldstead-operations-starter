@@ -52,7 +52,7 @@ export async function validateWindowsInstallerArtifacts({ packageJson, releaseDi
   if (metadata && !new RegExp(`^version:\\s*["']?${packageJson.version.replaceAll('.', '\\.')}`, 'm').test(metadata)) {
     failures.push(`latest.yml must declare package version ${packageJson.version}.`);
   }
-  if (metadata && !metadata.includes(installerName)) {
+  if (metadata && !metadata.includes(installerName) && !metadata.includes(installerName.replaceAll(' ', '%20'))) {
     failures.push(`latest.yml must reference the primary installer ${installerName}.`);
   }
 
@@ -66,9 +66,8 @@ export async function validateWindowsExecutableVersion(installerPath, expectedVe
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      '(Get-Item -LiteralPath $args[0]).VersionInfo.ProductVersion',
-      installerPath,
-    ]);
+      '(Get-Item -LiteralPath $env:FIELDSTEAD_INSTALLER_PATH).VersionInfo.ProductVersion',
+    ], { env: { ...process.env, FIELDSTEAD_INSTALLER_PATH: installerPath } });
     const productVersion = stdout.trim();
     return productVersion === expectedVersion || productVersion.startsWith(`${expectedVersion}.`)
       ? []
