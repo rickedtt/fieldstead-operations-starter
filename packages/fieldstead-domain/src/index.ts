@@ -76,6 +76,8 @@ export type Customer = {
   id: string;
   displayName: string;
   primaryEmail?: string;
+  primaryPhone?: string;
+  serviceAddress?: string;
   sourceEmail: SourceEmailIdentity;
   audit: AuditMetadata;
 };
@@ -95,7 +97,7 @@ export type ServiceRequest = {
 
 export type OutboxOperation = {
   id: string;
-  entityType: 'job' | 'jobAssignment' | 'activityEvent';
+  entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest';
   entityId: string;
   kind: string;
   payload: Record<string, unknown>;
@@ -219,6 +221,8 @@ export function parseCustomer(value: unknown): Customer {
     id: stringField(customer, 'id', 'Customer'),
     displayName: stringField(customer, 'displayName', 'Customer'),
     primaryEmail: optionalStringField(customer, 'primaryEmail', 'Customer'),
+    primaryPhone: optionalStringField(customer, 'primaryPhone', 'Customer'),
+    serviceAddress: optionalStringField(customer, 'serviceAddress', 'Customer'),
     sourceEmail: parseSourceEmailIdentity(customer.sourceEmail),
     audit: parseAuditMetadata(customer.audit),
   };
@@ -294,6 +298,8 @@ export function parseOutboxOperation(value: unknown): OutboxOperation {
       'job',
       'jobAssignment',
       'activityEvent',
+      'customer',
+      'serviceRequest',
     ] as const),
     entityId: stringField(operation, 'entityId', 'OutboxOperation'),
     kind: stringField(operation, 'kind', 'OutboxOperation'),

@@ -207,4 +207,47 @@ describe('durable customer and service request records', () => {
       },
     });
   });
+
+  it('atomically commits an owner-approved combined email conversion with audit and outbox writes', async () => {
+    const repo = await repository();
+    const input = {
+      operationId: 'email-op-1', approval: 'customer-and-request' as const,
+      customer: sampleCustomer(), serviceRequest: sampleServiceRequest(),
+      auditEvents: [
+        { id: 'audit-customer', at: '2026-09-24T12:00:00.000Z', customerId: 'customer-1', actor: 'owner-1', action: 'Email intake customer created', detail: 'Created from mailbox-1 / <request-1@example.com>.' },
+        { id: 'audit-request', at: '2026-09-24T12:00:00.000Z', customerId: 'customer-1', actor: 'owner-1', action: 'Email intake service request created', detail: 'Created request-1 from mailbox-1 / <request-1@example.com>.' },
+      ],
+      outboxOperations: [
+        { id: 'email-op-1:customer', entityType: 'customer' as const, entityId: 'customer-1', kind: 'customer.create-from-email', payload: sampleCustomer(), createdAt: '2026-09-24T12:00:00.000Z', status: 'pending' as const },
+        { id: 'email-op-1:request', entityType: 'serviceRequest' as const, entityId: 'request-1', kind: 'serviceRequest.create-from-email', payload: sampleServiceRequest(), createdAt: '2026-09-24T12:00:00.000Z', status: 'pending' as const },
+      ],
+    };
+
+    expect((await repo.convertEmailIntake(input)).replayed).toBe(false);
+    await expect(repo.customers.count()).resolves.toBe(1);
+    await expect(repo.serviceRequests.count()).resolves.toBe(1);
+    await expect(repo.activityEvents.count()).resolves.toBe(2);
+    await expect(repo.outboxOperations.count()).resolves.toBe(2);
+    expect((await repo.convertEmailIntake(input)).replayed).toBe(true);
+    await expect(repo.customers.count()).resolves.toBe(1);
+    await expect(repo.activityEvents.count()).resolves.toBe(2);
+  });
+
+  it('rejects conflicting idempotency reuse without changing prior writes', async () => {
+    const repo = await repository();
+    const input = {
+      operationId: 'email-op-conflict', approval: 'customer-and-request' as const,
+      customer: sampleCustomer(), serviceRequest: sampleServiceRequest(),
+      auditEvents: [{ id: 'audit-customer', at: '2026-09-24T12:00:00.000Z', customerId: 'customer-1', actor: 'owner-1', action: 'Email intake converted', detail: 'Approved.' }],
+      outboxOperations: [{ id: 'email-op-conflict:customer', entityType: 'customer' as const, entityId: 'customer-1', kind: 'customer.create-from-email', payload: sampleCustomer(), createdAt: '2026-09-24T12:00:00.000Z', status: 'pending' as const }],
+    };
+    await repo.convertEmailIntake(input);
+
+    await expect(repo.convertEmailIntake({ ...input, customer: sampleCustomer({ displayName: 'Changed' }) }))
+      .rejects.toThrow(/idempotency key reused/i);
+    await expect(repo.getCustomer('customer-1')).resolves.toMatchObject({ displayName: 'Jamie Rivera' });
+    await expect(repo.customers.count()).resolves.toBe(1);
+    await expect(repo.activityEvents.count()).resolves.toBe(1);
+    await expect(repo.outboxOperations.count()).resolves.toBe(1);
+  });
 });

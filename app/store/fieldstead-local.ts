@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import type { ActivityEvent, Job } from '../../packages/fieldstead-domain/src';
+import type { ActivityEvent, Customer as DurableCustomer, Job } from '../../packages/fieldstead-domain/src';
 import {
   createFieldsteadRepository,
   type FieldsteadRepository,
@@ -180,6 +180,16 @@ export class LocalJobsStore {
     }
   }
 
+  async listDurableCustomers(): Promise<DurableCustomer[]> {
+    await this.start();
+    return this.repository!.listCustomers();
+  }
+
+  async convertEmailIntake(input: Parameters<FieldsteadRepository['convertEmailIntake']>[0]) {
+    await this.start();
+    return this.repository!.convertEmailIntake(input);
+  }
+
   async migrateLocalStorage(storage: LegacyStorage): Promise<ImportResult> {
     try {
       await this.start();
@@ -237,6 +247,8 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     ...snapshot,
     mutateJob: store.mutateJob.bind(store),
     createJob: store.createJob.bind(store),
+    listDurableCustomers: store.listDurableCustomers.bind(store),
+    convertEmailIntake: store.convertEmailIntake.bind(store),
     migrateLocalStorage,
     replaceDemoJobs: store.replaceDemoJobs.bind(store),
     restoreSeedJobs: store.restoreSeedJobs.bind(store),

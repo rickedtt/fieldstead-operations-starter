@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import type { Customer } from '../packages/fieldstead-domain/src';
 import { proposeEmailIntakeReview } from '../lib/email-intake-review';
 import { EmailIntakeReviewPanel } from './email-intake-review-panel';
 
@@ -34,8 +35,8 @@ describe('email intake review panel', () => {
     expect(html).toContain('Confirm the service location before entry.');
     expect(html).toContain('Dismiss');
     expect(html).toContain('Edit proposal');
-    expect(html).toContain('Approve for manual entry');
-    expect(html).toContain('No customer or job records will be written');
+    expect(html).toContain('Continue to owner confirmation');
+    expect(html).toContain('Review, open, edit, and sync do not write Customer or ServiceRequest records');
   });
 
   it('renders editable fields without adding any record-writing action', () => {
@@ -54,18 +55,34 @@ describe('email intake review panel', () => {
     expect(html).not.toContain('Create job');
   });
 
-  it('shows approval as manual-entry readiness rather than a completed write', () => {
+  it('shows explicit durable conversion choices, duplicate candidates, and final-confirmation boundary', () => {
+    const duplicate: Customer = {
+      id: 'customer-existing', displayName: 'Jamie R.', primaryEmail: 'jamie@example.com',
+      primaryPhone: '3125550142', serviceAddress: '42 Oak Street',
+      sourceEmail: { accountId: 'old', messageId: 'old-message', normalizedFrom: 'jamie@example.com' },
+      audit: { createdAt: '2026-09-01T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-01T12:00:00.000Z', updatedBy: 'owner-1' },
+    };
     const html = renderToStaticMarkup(<EmailIntakeReviewPanel
       proposal={proposal}
       mode="approved"
+      customers={[duplicate]}
+      selectedApproval="customer-and-request"
+      onSelectApproval={vi.fn()}
       onDismiss={vi.fn()}
       onEdit={vi.fn()}
       onApprove={vi.fn()}
+      onConfirmConversion={vi.fn()}
     />);
 
-    expect(html).toContain('Approved for manual entry');
-    expect(html).toContain('No customer or job record was created');
-    expect(html).toContain('Edit proposal');
-    expect(html).toContain('Dismiss');
+    expect(html).toContain('Choose what to create');
+    expect(html).toContain('Customer only');
+    expect(html).toContain('Service request only');
+    expect(html).toContain('Customer + service request');
+    expect(html).toContain('Possible duplicate customer');
+    expect(html).toContain('email, phone, address');
+    expect(html).toContain('I reviewed the proposed records and duplicate candidates');
+    expect(html).toContain('Confirm durable conversion');
+    expect(html).toContain('disabled');
+    expect(html).not.toContain('Create job');
   });
 });

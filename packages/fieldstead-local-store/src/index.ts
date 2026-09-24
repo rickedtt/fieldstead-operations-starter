@@ -49,6 +49,15 @@ export type ServiceRequestUpdate = {
   updatedBy: string;
 };
 
+export type EmailIntakeConversion = {
+  operationId: string;
+  approval: 'customer-only' | 'request-only' | 'customer-and-request';
+  customer?: Customer;
+  serviceRequest?: ServiceRequest;
+  auditEvents: ActivityEvent[];
+  outboxOperations: OutboxOperation[];
+};
+
 function sourceEmailKey(record: Customer | ServiceRequest): [string, string] {
   return [record.sourceEmail.accountId, record.sourceEmail.messageId];
 }
@@ -86,6 +95,15 @@ export class FieldsteadRepository extends Dexie {
       customers: 'id, primaryEmail, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
       serviceRequests: 'id, customerId, status, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
     });
+    this.version(3).stores({
+      jobs: 'id, customerId, status, updatedAt',
+      assignments: 'id, jobId, assigneeId, assignedAt',
+      activityEvents: 'id, jobId, customerId, at',
+      outboxOperations: 'id, status, createdAt, [entityType+entityId]',
+      metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      serviceRequests: 'id, customerId, status, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+    });
   }
 
   getCustomer(customerId: string): Promise<Customer | undefined> {
@@ -94,6 +112,28 @@ export class FieldsteadRepository extends Dexie {
 
   listCustomers(): Promise<Customer[]> {
     return this.customers.orderBy('audit.updatedAt').reverse().toArray();
+  }
+
+  async convertEmailIntake(input: EmailIntakeConversion): Promise<{ replayed: boolean; customer?: Customer; serviceRequest?: ServiceRequest }> {
+    const customer = input.customer ? parseCustomer(input.customer) : undefined;
+    const serviceRequest = input.serviceRequest ? parseServiceRequest(input.serviceRequest) : undefined;
+    const auditEvents = input.auditEvents.map(parseActivityEvent);
+    const outboxOperations = input.outboxOperations.map(parseOutboxOperation);
+    const fingerprint = JSON.stringify({ approval: input.approval, customer, serviceRequest, auditEvents, outboxOperations });
+    const key = `email-intake-conversion:${input.operationId}`;
+    return this.transaction('rw', this.customers, this.serviceRequests, this.activityEvents, this.outboxOperations, this.metadata, async () => {
+      const prior = await this.metadata.get(key);
+      if (prior) {
+        if (prior.value !== fingerprint) throw new Error('Email intake idempotency key reused with different content');
+        return { replayed: true, customer, serviceRequest };
+      }
+      if (customer) await this.customers.add(customer);
+      if (serviceRequest) await this.serviceRequests.add(serviceRequest);
+      if (auditEvents.length) await this.activityEvents.bulkAdd(auditEvents);
+      if (outboxOperations.length) await this.outboxOperations.bulkAdd(outboxOperations);
+      await this.metadata.add({ key, value: fingerprint, updatedAt: outboxOperations[0]?.createdAt ?? auditEvents[0]?.at ?? new Date().toISOString() });
+      return { replayed: false, customer, serviceRequest };
+    });
   }
 
   findCustomerBySourceEmail(accountId: string, messageId: string): Promise<Customer | undefined> {
