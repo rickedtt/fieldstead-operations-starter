@@ -97,6 +97,19 @@ export type ServiceRequest = {
   audit: AuditMetadata;
 };
 
+export type OperationalAttachment = {
+  id: string;
+  ownerType: 'job' | 'serviceRequest';
+  ownerId: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  checksum: string;
+  createdAt: string;
+  createdBy: string;
+  source: { kind: 'desktop-upload' };
+};
+
 export type OutboxOperation = {
   id: string;
   entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest';
@@ -241,6 +254,25 @@ export function parseServiceRequest(value: unknown): ServiceRequest {
     convertedJobId: optionalStringField(request, 'convertedJobId', 'ServiceRequest'),
     sourceEmail: parseSourceEmailIdentity(request.sourceEmail),
     audit: parseAuditMetadata(request.audit),
+  };
+}
+
+export function parseOperationalAttachment(value: unknown): OperationalAttachment {
+  const attachment = record(value, 'OperationalAttachment');
+  const source = record(attachment.source, 'OperationalAttachment.source');
+  const checksum = stringField(attachment, 'checksum', 'OperationalAttachment');
+  if (!/^sha256:[a-f0-9]{64}$/.test(checksum)) throw new TypeError('OperationalAttachment.checksum is not supported');
+  return {
+    id: stringField(attachment, 'id', 'OperationalAttachment'),
+    ownerType: enumField(attachment, 'ownerType', 'OperationalAttachment', ['job', 'serviceRequest'] as const),
+    ownerId: stringField(attachment, 'ownerId', 'OperationalAttachment'),
+    filename: stringField(attachment, 'filename', 'OperationalAttachment'),
+    contentType: stringField(attachment, 'contentType', 'OperationalAttachment'),
+    size: numberField(attachment, 'size', 'OperationalAttachment'),
+    checksum,
+    createdAt: stringField(attachment, 'createdAt', 'OperationalAttachment'),
+    createdBy: stringField(attachment, 'createdBy', 'OperationalAttachment'),
+    source: { kind: enumField(source, 'kind', 'OperationalAttachment.source', ['desktop-upload'] as const) },
   };
 }
 

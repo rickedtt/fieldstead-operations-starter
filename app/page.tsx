@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { FormEvent, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   Activity, Customer, InvoiceStatus, Job, OperationsState, QuoteStatus,
   advanceJob, createJob, nextAction, searchJobs, seedState, setInvoiceStatus,
@@ -33,6 +33,7 @@ type Theme = 'dark' | 'light';
 type EmailConnectionInput = { provider: string; email: string; displayName: string; username: string; password: string; imap: { host: string; port: number; secure: boolean }; smtp: { host: string; port: number; secure: boolean } };
 type EmailMessage = RenderableEmailMessage & { subject: string; from: string; fromName: string; receivedAt: string; unread: boolean; starred?: boolean };
 type EmailAccount = { id: string; email: string; displayName?: string; provider?: string; lastTestedAt?: string | null; configured?: boolean };
+type OperationalAttachment = { id:string; ownerType:'job'|'serviceRequest'; ownerId:string; filename:string; contentType:string; size:number; checksum:string; createdAt:string; createdBy:string; source:{kind:'desktop-upload'} };
 
 const UPDATE_CHANGELOG = [
   { version: 'Current', date: 'September 20, 2026', detail: 'Synchronized the Operations Starter scope across the program: clearer office workflow, scheduling attention, daily follow-up, reporting, activity history, and explicit add-on boundaries.' },
@@ -59,6 +60,12 @@ declare global {
       previewEmailAttachment: (accountId: string, messageId: string, attachmentId: string) => Promise<{ ok: boolean; filename?: string; message?: string }>;
       saveEmailAttachment: (accountId: string, messageId: string, attachmentId: string) => Promise<{ ok: boolean; canceled?: boolean; filename?: string; bytes?: number; message?: string }>;
       openEmailExternalLink: (url: string) => Promise<{ ok: boolean; url?: string; message?: string }>;
+      chooseOperationalAttachment: (ownerType: 'job'|'serviceRequest', ownerId: string, actorId: string) => Promise<{ ok:boolean; canceled?:boolean; attachment?:OperationalAttachment; message?:string }>;
+      listOperationalAttachments: (ownerType: 'job'|'serviceRequest', ownerId: string) => Promise<{ ok:boolean; attachments?:OperationalAttachment[]; message?:string }>;
+      previewOperationalAttachment: (attachmentId: string) => Promise<{ ok:boolean; filename?:string; message?:string }>;
+      exportOperationalAttachment: (attachmentId: string) => Promise<{ ok:boolean; canceled?:boolean; filename?:string; message?:string }>;
+      deleteOperationalAttachment: (attachmentId: string, actorId: string) => Promise<{ ok:boolean; message?:string }>;
+      getOperationalAttachmentBackupManifest: () => Promise<{ ok:boolean; manifest?:{ attachmentCount:number; contentIncluded:boolean; warning:string }; message?:string }>;
       getSetupState: () => Promise<unknown>;
       saveSetupState: (state: SetupState) => Promise<unknown>;
       getAppVersion: () => Promise<string>;
@@ -95,6 +102,23 @@ function StatusPill({ children }: { children:string }) {
 
 function Empty({ title, detail }: { title:string; detail:string }) {
   return <div className="empty"><span aria-hidden="true">◇</span><h3>{title}</h3><p>{detail}</p></div>;
+}
+
+function OperationalAttachments({ ownerType, ownerId, localData }: { ownerType:'job'|'serviceRequest'; ownerId:string; localData:ReturnType<typeof useFieldsteadLocalJobs> }) {
+  const [attachments, setAttachments] = useState<OperationalAttachment[]>([]);
+  const [status, setStatus] = useState('Attachments are stored locally on this desktop.');
+  const refresh = useCallback(async () => {
+    const result = await window.fieldsteadDesktop?.listOperationalAttachments(ownerType, ownerId);
+    if (result?.ok) {
+      setAttachments(result.attachments || []);
+    } else if (result?.message) setStatus(result.message);
+  }, [ownerType, ownerId]);
+  useEffect(() => { const timer = window.setTimeout(() => { void refresh(); }, 0); return () => window.clearTimeout(timer); }, [refresh]);
+  async function add() { const result = await window.fieldsteadDesktop?.chooseOperationalAttachment(ownerType, ownerId, 'Fieldstead owner'); if (result?.ok && result.attachment) { await localData.recordAttachmentAdded(result.attachment); setStatus(`${result.attachment.filename} added.`); await refresh(); } else if (!result?.canceled) setStatus(result?.message || 'Attachment could not be added.'); }
+  async function preview(id:string) { const result = await window.fieldsteadDesktop?.previewOperationalAttachment(id); setStatus(result?.ok ? `${result.filename || 'Attachment'} opened.` : result?.message || 'Preview is unavailable.'); }
+  async function exportFile(id:string) { const result = await window.fieldsteadDesktop?.exportOperationalAttachment(id); setStatus(result?.ok ? `${result.filename || 'Attachment'} exported.` : result?.canceled ? 'Export canceled.' : result?.message || 'Export failed.'); }
+  async function remove(item:OperationalAttachment) { if (!window.confirm(`Delete ${item.filename} from this local record? This removes the managed content and records an audit tombstone.`)) return; const result = await window.fieldsteadDesktop?.deleteOperationalAttachment(item.id, 'Fieldstead owner'); if (result?.ok) { await localData.recordAttachmentDeleted(item.id); setStatus(`${item.filename} deleted.`); await refresh(); } else setStatus(result?.message || 'Delete failed.'); }
+  return <section className="detail-section"><div className="detail-heading"><h3>Attachments &amp; photos</h3><button className="secondary" onClick={() => void add()}>Add attachment</button></div><p className="helper">PDF, plain text, JPEG, PNG, GIF, and WebP only. Files stay on this desktop.</p>{attachments.length ? <div className="attachment-list">{attachments.map((item) => <div className="attachment-card" key={item.id}><span><strong>{item.filename}</strong><small>{item.contentType} · {Math.ceil(item.size / 1024)} KB</small></span><div><button onClick={() => void preview(item.id)}>Preview</button><button onClick={() => void exportFile(item.id)}>Export</button><button className="danger" onClick={() => void remove(item)}>Delete</button></div></div>)}</div> : <p className="helper">No attachments yet.</p>}<p className="helper" role="status">{status}</p></section>;
 }
 
 export default function Home() {
@@ -278,7 +302,7 @@ export default function Home() {
 
       </section>
 
-      {selectedJob && <JobDrawer state={state} job={selectedJob} close={() => setSelectedJobId(undefined)} save={(next,message) => mutate(next,message)} />}
+      {selectedJob && <JobDrawer state={state} job={selectedJob} localData={localJobs} close={() => setSelectedJobId(undefined)} save={(next,message) => mutate(next,message)} />}
       {selectedCustomer && <CustomerDrawer state={state} customer={selectedCustomer} close={() => setSelectedCustomerId(undefined)} openJob={(id) => { setSelectedCustomerId(undefined); setSelectedJobId(id); }} remove={() => removeCustomer(selectedCustomer.id)} />}
       {modal === 'job' && <NewJobModal state={state} close={() => setModal(null)} save={saveNewJob} />}
       {modal === 'customer' && <NewCustomerModal state={state} close={() => setModal(null)} save={(next) => { mutate(next,'Customer added'); setModal(null); }} />}
@@ -564,6 +588,9 @@ function ClientDeliveryView({ state, applyImport, restore }: { state:OperationsS
     anchor.click();
     URL.revokeObjectURL(url);
     setMessage('Local Fieldstead JSON backup downloaded.');
+    void window.fieldsteadDesktop?.getOperationalAttachmentBackupManifest().then((result) => {
+      if (result?.manifest?.attachmentCount) setMessage(`Local JSON backup downloaded. Managed attachment content is not included; ${result.manifest.warning}`);
+    });
   }
 
   async function restoreFile(file?: File) {
@@ -613,7 +640,7 @@ function ClientDeliveryView({ state, applyImport, restore }: { state:OperationsS
         <dl><div><dt>Customers</dt><dd>{state.customers.length}</dd></div><div><dt>Jobs</dt><dd>{state.jobs.length}</dd></div><div><dt>Audit events</dt><dd>{state.activity.length}</dd></div></dl>
         <button className="primary full" onClick={downloadBackup}>Download JSON backup</button>
         <label className="secondary restore-button">Restore from backup<input type="file" accept="application/json,.json" onChange={(event) => { void restoreFile(event.target.files?.[0]); event.target.value = ''; }}/></label>
-        <p className="boundary-note">No credentials, provider calls, or remote writes are used. Shared-device sync is not configured yet.</p>
+        <p className="boundary-note">Managed attachment content is not included in this JSON backup. No credentials, provider calls, or remote writes are used.</p>
       </aside>
     </div>
     <p className="delivery-message" role="status">{message}</p>
@@ -624,7 +651,7 @@ function DrawerShell({ title, subtitle, close, children }: { title:string; subti
   return <div className="overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><aside className="drawer" role="dialog" aria-modal="true" aria-label={title}><header><div><p className="eyebrow">{subtitle}</p><h2>{title}</h2></div><button className="close" aria-label="Close details" onClick={close}>×</button></header>{children}</aside></div>;
 }
 
-function JobDrawer({ state, job, close, save }: { state:OperationsState; job:Job; close:()=>void; save:(next:OperationsState,message:string)=>void }) {
+function JobDrawer({ state, job, localData, close, save }: { state:OperationsState; job:Job; localData:ReturnType<typeof useFieldsteadLocalJobs>; close:()=>void; save:(next:OperationsState,message:string)=>void }) {
   const customer = getCustomer(state,job); const action = nextAction(job);
   const [scheduledFor,setScheduledFor] = useState(toLocalInput(job.scheduledFor)); const [crew,setCrew] = useState(job.crew);
   const nextStatus = job.status === 'Quoted' && job.quoteStatus !== 'Approved' ? undefined : statusOrder[statusOrder.indexOf(job.status)+1];
@@ -635,6 +662,7 @@ function JobDrawer({ state, job, close, save }: { state:OperationsState; job:Job
       <section className="detail-section"><div className="detail-heading"><h3>Estimate</h3><strong>{money.format(job.quoteAmount)}</strong></div><div className="segmented" role="group" aria-label="Estimate status">{(['Draft','Sent','Approved','Declined'] as QuoteStatus[]).map((status) => <button className={job.quoteStatus === status ? 'selected' : ''} key={status} onClick={() => save(setQuoteStatus(state,job.id,status),`Estimate marked ${status.toLowerCase()}`)}>{status}</button>)}</div><p className="helper">Status changes are recorded only. This dogfood app never sends real messages.</p></section>
       <section className="detail-section"><h3>Schedule &amp; handoff</h3><div className="form-grid"><label>Visit date and time<input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)}/></label><label>Crew<input value={crew} onChange={(event) => setCrew(event.target.value)} placeholder="Unassigned"/></label></div><button className="secondary full" onClick={() => save(updateJob(state,job.id,{ scheduledFor:scheduledFor ? new Date(scheduledFor).toISOString() : undefined, crew },'Schedule updated',`${formatWhen(scheduledFor ? new Date(scheduledFor).toISOString() : undefined)} · ${crew || 'Unassigned'}`),'Schedule saved')}>Save schedule</button></section>
       <section className="detail-section"><div className="detail-heading"><h3>Invoice &amp; payment</h3><strong>{money.format(job.invoiceAmount)}</strong></div><label className="select-label full-label">Invoice state<select value={job.invoiceStatus} onChange={(event) => save(setInvoiceStatus(state,job.id,event.target.value as InvoiceStatus),`Invoice marked ${event.target.value.toLowerCase()}`)}>{(['Not created','Draft','Sent','Paid','Overdue'] as InvoiceStatus[]).map((status) => <option key={status}>{status}</option>)}</select></label><p className="helper">This tracks bookkeeping state only. No invoice or payment is transmitted.</p></section>
+      <OperationalAttachments ownerType="job" ownerId={job.id} localData={localData}/>
       <section className="detail-section"><h3>Job activity</h3><div className="drawer-activity">{state.activity.filter((item) => item.jobId === job.id).map((item) => <div key={item.id}><span/><div><strong>{item.action}</strong><p>{item.detail}</p><small>{dateTime.format(new Date(item.at))} · {item.actor}</small></div></div>)}</div></section>
     </div>
   </DrawerShell>;

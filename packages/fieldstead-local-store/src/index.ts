@@ -4,6 +4,7 @@ import {
   parseActivityEvent,
   parseCustomer,
   parseJob,
+  parseOperationalAttachment,
   parseOutboxOperation,
   parseServiceRequest,
   type ActivityEvent,
@@ -11,6 +12,7 @@ import {
   type Job,
   type JobAssignment,
   type OutboxOperation,
+  type OperationalAttachment,
   type ServiceRequest,
 } from '../../fieldstead-domain/src';
 
@@ -68,6 +70,21 @@ export type EmailIntakeConversion = {
   outboxOperations: OutboxOperation[];
 };
 
+export type AttachmentAdd = {
+  attachment: OperationalAttachment;
+  actorId: string;
+  actorRole: 'owner_admin' | 'dispatcher' | 'field_crew';
+  auditEventId: string;
+};
+
+export type AttachmentDelete = {
+  attachmentId: string;
+  actorId: string;
+  actorRole: 'owner_admin' | 'dispatcher' | 'field_crew';
+  occurredAt: string;
+  auditEventId: string;
+};
+
 function sourceEmailKey(record: Customer | ServiceRequest): [string, string] {
   return [record.sourceEmail.accountId, record.sourceEmail.messageId];
 }
@@ -84,6 +101,7 @@ export class FieldsteadRepository extends Dexie {
   metadata!: EntityTable<StoreMetadata, 'key'>;
   customers!: EntityTable<Customer, 'id'>;
   serviceRequests!: EntityTable<ServiceRequest, 'id'>;
+  attachments!: EntityTable<OperationalAttachment, 'id'>;
 
   constructor(databaseName = 'fieldstead') {
     super(databaseName);
@@ -122,6 +140,53 @@ export class FieldsteadRepository extends Dexie {
       metadata: 'key, updatedAt',
       customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
       serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+    });
+    this.version(5).stores({
+      jobs: 'id, customerId, serviceRequestId, status, updatedAt',
+      assignments: 'id, jobId, assigneeId, assignedAt',
+      activityEvents: 'id, jobId, customerId, at',
+      outboxOperations: 'id, status, createdAt, [entityType+entityId]',
+      metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      attachments: 'id, [ownerType+ownerId], createdAt, checksum',
+    });
+  }
+
+  listAttachments(ownerType: OperationalAttachment['ownerType'], ownerId: string): Promise<OperationalAttachment[]> {
+    return this.attachments.where('[ownerType+ownerId]').equals([ownerType, ownerId]).sortBy('createdAt');
+  }
+
+  async recordAttachmentAdded(input: AttachmentAdd): Promise<OperationalAttachment> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to add an attachment');
+    const attachment = parseOperationalAttachment(input.attachment);
+    const event = parseActivityEvent({
+      id: input.auditEventId, at: attachment.createdAt,
+      jobId: attachment.ownerType === 'job' ? attachment.ownerId : undefined,
+      actor: input.actorId, action: 'Attachment added',
+      detail: `${attachment.filename} added to ${attachment.ownerType} ${attachment.ownerId}.`,
+    });
+    return this.transaction('rw', this.attachments, this.activityEvents, async () => {
+      await this.attachments.add(attachment);
+      await this.activityEvents.add(event);
+      return attachment;
+    });
+  }
+
+  async recordAttachmentDeleted(input: AttachmentDelete): Promise<OperationalAttachment> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to delete an attachment');
+    return this.transaction('rw', this.attachments, this.activityEvents, async () => {
+      const attachment = await this.attachments.get(input.attachmentId);
+      if (!attachment) throw new Error(`Attachment ${input.attachmentId} was not found`);
+      const event = parseActivityEvent({
+        id: input.auditEventId, at: input.occurredAt,
+        jobId: attachment.ownerType === 'job' ? attachment.ownerId : undefined,
+        actor: input.actorId, action: 'Attachment deleted',
+        detail: `${attachment.filename} deleted from ${attachment.ownerType} ${attachment.ownerId}.`,
+      });
+      await this.attachments.delete(attachment.id);
+      await this.activityEvents.add(event);
+      return attachment;
     });
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import type { ActivityEvent, Customer as DurableCustomer, Job, ServiceRequest } from '../../packages/fieldstead-domain/src';
+import type { ActivityEvent, Customer as DurableCustomer, Job, OperationalAttachment, ServiceRequest } from '../../packages/fieldstead-domain/src';
 import {
   createFieldsteadRepository,
   type FieldsteadRepository,
@@ -206,6 +206,27 @@ export class LocalJobsStore {
     return this.repository!.convertEmailIntake(input);
   }
 
+  async recordAttachmentAdded(attachment: OperationalAttachment) {
+    await this.start();
+    return this.repository!.recordAttachmentAdded({
+      attachment, actorId: 'Fieldstead owner', actorRole: 'owner_admin',
+      auditEventId: `activity-${this.createOperationId()}`,
+    });
+  }
+
+  async recordAttachmentDeleted(attachmentId: string) {
+    await this.start();
+    return this.repository!.recordAttachmentDeleted({
+      attachmentId, actorId: 'Fieldstead owner', actorRole: 'owner_admin', occurredAt: this.now(),
+      auditEventId: `activity-${this.createOperationId()}`,
+    });
+  }
+
+  async listAttachments(ownerType: OperationalAttachment['ownerType'], ownerId: string) {
+    await this.start();
+    return this.repository!.listAttachments(ownerType, ownerId);
+  }
+
   async migrateLocalStorage(storage: LegacyStorage): Promise<ImportResult> {
     try {
       await this.start();
@@ -267,6 +288,9 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     getDurableServiceRequest: store.getDurableServiceRequest.bind(store),
     convertEmailIntake: store.convertEmailIntake.bind(store),
     convertServiceRequestToJob: store.convertServiceRequestToJob.bind(store),
+    recordAttachmentAdded: store.recordAttachmentAdded.bind(store),
+    recordAttachmentDeleted: store.recordAttachmentDeleted.bind(store),
+    listAttachments: store.listAttachments.bind(store),
     migrateLocalStorage,
     replaceDemoJobs: store.replaceDemoJobs.bind(store),
     restoreSeedJobs: store.restoreSeedJobs.bind(store),

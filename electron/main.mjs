@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import fsSync from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, screen, session, shell } from 'electron';
@@ -12,6 +13,7 @@ app.commandLine.appendSwitch('ozone-platform', 'x11');
 import { clearEmailConfig, emailBulkAction, emailMessageAction, getEmailAccounts, getEmailAttachmentMetadata, getEmailConfig, previewEmailAttachment, saveEmailAttachment, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
 import { createSetupStore } from './setup-store.mjs';
 import { openSafeExternalLink } from './external-link.mjs';
+import { createOperationalAttachmentStore, OPERATIONAL_ATTACHMENT_MIME_TYPES } from './operational-attachment-store.mjs';
 import updater from 'electron-updater';
 const { autoUpdater } = updater;
 
@@ -38,6 +40,14 @@ let mainWindow;
 let serverProcess;
 let shutdownStarted = false;
 let allowQuit = false;
+
+function operationalAttachmentStore() {
+  return createOperationalAttachmentStore(path.join(app.getPath('userData'), 'operational-attachments'));
+}
+
+function attachmentResult(error) {
+  return { ok: false, message: error instanceof Error ? error.message : String(error) };
+}
 
 function publishUpdateStatus(status) {
   mainWindow?.webContents.send('fieldstead-update-status', status);
@@ -92,6 +102,60 @@ ipcMain.handle('fieldstead:email-attachment-save', async (_event, accountId, mes
 ipcMain.handle('fieldstead:email-open-external-link', async (_event, url) => {
   try { return await openSafeExternalLink(shell.openExternal, url); }
   catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; }
+});
+ipcMain.handle('fieldstead:operational-attachment-list', async (_event, ownerType, ownerId) => {
+  try { return { ok: true, attachments: await operationalAttachmentStore().list(ownerType, ownerId) }; }
+  catch (error) { return attachmentResult(error); }
+});
+ipcMain.handle('fieldstead:operational-attachment-choose', async (_event, ownerType, ownerId, actorId) => {
+  try {
+    const choice = await dialog.showOpenDialog(mainWindow, {
+      title: 'Add job or service request attachment',
+      buttonLabel: 'Add attachment',
+      properties: ['openFile'],
+      filters: [{ name: 'Safe documents and photos', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt'] }],
+    });
+    if (choice.canceled || !choice.filePaths[0]) return { ok: false, canceled: true };
+    const sourcePath = choice.filePaths[0];
+    const extension = path.extname(sourcePath).toLowerCase();
+    const typeByExtension = { '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.gif':'image/gif', '.webp':'image/webp', '.pdf':'application/pdf', '.txt':'text/plain' };
+    const contentType = typeByExtension[extension];
+    if (!contentType || !OPERATIONAL_ATTACHMENT_MIME_TYPES.includes(contentType)) throw new Error('This attachment type is not allowed.');
+    const attachment = await operationalAttachmentStore().importFile({
+      id: `attachment-${crypto.randomUUID()}`, ownerType, ownerId, sourcePath,
+      originalFilename: path.basename(sourcePath), contentType, actorId,
+      createdAt: new Date().toISOString(), source: { kind: 'desktop-upload' },
+    });
+    return { ok: true, attachment };
+  } catch (error) { return attachmentResult(error); }
+});
+ipcMain.handle('fieldstead:operational-attachment-preview', async (_event, attachmentId) => {
+  try {
+    const preview = await operationalAttachmentStore().preview(attachmentId);
+    const error = await shell.openPath(preview.path);
+    return error ? { ok: false, message: error } : { ok: true, filename: preview.filename };
+  } catch (error) { return attachmentResult(error); }
+});
+ipcMain.handle('fieldstead:operational-attachment-export', async (_event, attachmentId) => {
+  try {
+    const attachment = await operationalAttachmentStore().metadata(attachmentId);
+    const choice = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export attachment', defaultPath: attachment.filename, buttonLabel: 'Export',
+      properties: ['showOverwriteConfirmation', 'createDirectory'],
+    });
+    if (choice.canceled || !choice.filePath) return { ok: false, canceled: true };
+    return { ok: true, ...(await operationalAttachmentStore().exportFile(attachmentId, choice.filePath)) };
+  } catch (error) { return attachmentResult(error); }
+});
+ipcMain.handle('fieldstead:operational-attachment-delete', async (_event, attachmentId, actorId, actorRole = 'owner_admin') => {
+  try {
+    if (actorRole !== 'owner_admin') throw new Error('Owner approval is required to delete an attachment.');
+    return { ok: true, attachment: await operationalAttachmentStore().delete(attachmentId, { actorId, deletedAt: new Date().toISOString() }) };
+  } catch (error) { return attachmentResult(error); }
+});
+ipcMain.handle('fieldstead:operational-attachment-backup-manifest', async () => {
+  try { return { ok: true, manifest: await operationalAttachmentStore().backupManifest() }; }
+  catch (error) { return attachmentResult(error); }
 });
 ipcMain.handle('fieldstead:setup-get', () => createSetupStore(app.getPath('userData')).load());
 ipcMain.handle('fieldstead:setup-save', (_event, state) => createSetupStore(app.getPath('userData')).save(state));

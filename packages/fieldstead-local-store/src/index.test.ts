@@ -136,6 +136,59 @@ function sampleServiceRequest(overrides: Partial<ServiceRequest> = {}): ServiceR
 }
 
 describe('durable customer and service request records', () => {
+  it('migrates the existing database to durable attachment metadata without losing records', async () => {
+    const name = `fieldstead-v5-${crypto.randomUUID()}`;
+    const legacy = createFieldsteadRepository(name);
+    databases.push(legacy);
+    await legacy.jobs.put(sampleJob());
+    legacy.close();
+
+    const repo = createFieldsteadRepository(name);
+    databases.push(repo);
+    await repo.open();
+    await expect(repo.attachments.count()).resolves.toBe(0);
+    await expect(repo.getJob('HP-2000')).resolves.toEqual(sampleJob());
+  });
+
+  it('records owner-approved local-only attachment metadata changes with audit events and no outbox operations', async () => {
+    const repo = await repository();
+    const metadata = {
+      id: 'attachment-1', ownerType: 'job' as const, ownerId: 'HP-2000', filename: 'before.png',
+      contentType: 'image/png', size: 16, checksum: `sha256:${'a'.repeat(64)}`,
+      createdAt: '2026-09-24T15:00:00.000Z', createdBy: 'Fieldstead owner',
+      source: { kind: 'desktop-upload' as const },
+    };
+    await repo.recordAttachmentAdded({
+      attachment: metadata, actorId: 'Fieldstead owner', actorRole: 'owner_admin',
+      auditEventId: 'activity-attachment-add-1',
+    });
+
+    await expect(repo.listAttachments('job', 'HP-2000')).resolves.toEqual([metadata]);
+    await expect(repo.activityEvents.get('activity-attachment-add-1')).resolves.toMatchObject({ action: 'Attachment added', jobId: 'HP-2000' });
+    await expect(repo.outboxOperations.count()).resolves.toBe(0);
+
+    await repo.recordAttachmentDeleted({
+      attachmentId: 'attachment-1', actorId: 'Fieldstead owner', actorRole: 'owner_admin',
+      occurredAt: '2026-09-24T16:00:00.000Z', auditEventId: 'activity-attachment-delete-1',
+    });
+    await expect(repo.listAttachments('job', 'HP-2000')).resolves.toEqual([]);
+    await expect(repo.outboxOperations.count()).resolves.toBe(0);
+  });
+
+  it('requires explicit owner approval for attachment metadata mutations', async () => {
+    const repo = await repository();
+    await expect(repo.recordAttachmentAdded({
+      attachment: {
+        id: 'attachment-1', ownerType: 'job', ownerId: 'HP-2000', filename: 'before.png',
+        contentType: 'image/png', size: 16, checksum: `sha256:${'a'.repeat(64)}`,
+        createdAt: '2026-09-24T15:00:00.000Z', createdBy: 'dispatcher', source: { kind: 'desktop-upload' },
+      },
+      actorId: 'dispatcher', actorRole: 'dispatcher', auditEventId: 'activity-attachment-add-1',
+    })).rejects.toThrow(/owner approval/i);
+    await expect(repo.attachments.count()).resolves.toBe(0);
+    await expect(repo.outboxOperations.count()).resolves.toBe(0);
+  });
+
   it('persists and queries records without changing version 1 jobs', async () => {
     const name = `fieldstead-v2-${crypto.randomUUID()}`;
     const legacy = createFieldsteadRepository(name);

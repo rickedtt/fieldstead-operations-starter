@@ -12,7 +12,8 @@ describe('email attachment IPC contract', () => {
     expect(preload).toContain("ipcRenderer.invoke('fieldstead:email-attachment-save'");
     expect(main).toContain("ipcMain.handle('fieldstead:email-attachment-save'");
     expect(main).toContain('dialog.showSaveDialog');
-    expect(main).not.toContain('showOpenDialog');
+    const emailSaveHandler = main.slice(main.indexOf("ipcMain.handle('fieldstead:email-attachment-save'"), main.indexOf("ipcMain.handle('fieldstead:email-open-external-link'"));
+    expect(emailSaveHandler).not.toContain('showOpenDialog');
   });
 
   it('previews allowlisted attachments through a narrow main-process IPC path', async () => {
