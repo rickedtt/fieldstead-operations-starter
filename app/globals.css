@@ -275,3 +275,34 @@ html,body,#root{margin:0!important;padding:0!important;background:var(--green-da
 .app-shell{margin:0!important;min-height:100vh;background:var(--green-dark)}
 .workspace{background:var(--paper)}
 .sidebar{margin:0!important;border:0!important;outline:0!important;background:var(--green-dark)!important}
+
+/* Small-window navigation: keep a compact accessible rail instead of hiding the sidebar. */
+@media(max-width:800px){
+  .app-shell,.app-shell.sidebar-collapsed{display:grid;grid-template-columns:64px minmax(0,1fr);min-width:0}
+  .sidebar{display:flex;width:64px;height:100vh;padding:14px 8px 10px;overflow:hidden}
+  .brand{justify-content:center;padding-bottom:16px}
+  .brand-logo-full{display:none}
+  .brand-logo-compact{display:block;width:32px;height:32px;border-radius:8px}
+  .sidebar-toggle{align-self:center;margin:-4px 0 10px}
+  .sidebar nav{gap:4px}
+  .nav-item{justify-content:center;min-height:40px;padding:8px 4px}
+  .nav-item .nav-label,.nav-item b{display:none}
+  .nav-item .nav-icon{display:block}
+  .local-note{display:none}
+  .sidebar-foot{grid-template-columns:1fr;justify-items:center;padding:10px 0 0;gap:0}
+  .sidebar-foot>span:not(.avatar),.sidebar-foot button{display:none}
+  .workspace{min-width:0;padding-bottom:0}
+  .topbar{min-height:78px;padding:14px 16px;gap:10px}
+  .topbar h1{font-size:clamp(19px,4vw,26px)}
+  .header-actions{max-width:48%;gap:5px}
+  .header-actions .primary,.header-actions .secondary{min-height:32px;padding:6px 8px;font-size:10px}
+  .content{width:calc(100% - 24px);max-width:none;padding:18px 0 32px}
+  .mobile-nav{display:none!important}
+}
+@media(max-width:520px){
+  .app-shell,.app-shell.sidebar-collapsed{grid-template-columns:56px minmax(0,1fr)}
+  .sidebar{width:56px;padding-inline:6px}
+  .content{width:calc(100% - 16px)}
+  .topbar{padding-inline:10px}
+  .header-actions{max-width:46%}
+}
