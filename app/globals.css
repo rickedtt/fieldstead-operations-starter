@@ -306,3 +306,11 @@ html,body,#root{margin:0!important;padding:0!important;background:var(--green-da
   .topbar{padding-inline:10px}
   .header-actions{max-width:46%}
 }
+
+
+/* Review-only deterministic email intake proposal. */
+.email-intake-review{display:grid;gap:14px;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.email-intake-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.email-intake-heading h3{margin:2px 0 0}.email-intake-boundary,.email-intake-confirmation{margin:0;padding:10px 12px;border-radius:9px;background:var(--paper);color:var(--muted);line-height:1.45}.email-intake-confirmation{background:var(--sage);color:var(--ink);font-weight:800}
+.email-intake-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.email-intake-fields label{display:grid;gap:5px;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--paper);font-size:11px;font-weight:800}.email-intake-fields strong{font-size:13px;overflow-wrap:anywhere}.email-intake-evidence{color:var(--muted);font-size:10px;font-weight:600}.email-intake-evidence.missing{color:var(--danger)}
+.email-intake-warnings{padding:11px 13px;border:1px solid var(--line);border-radius:9px}.email-intake-warnings ul{margin:7px 0 0;padding-left:18px;color:var(--muted)}.email-intake-actions{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:760px){.email-intake-fields{grid-template-columns:1fr}.email-intake-heading{display:grid}}
