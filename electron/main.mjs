@@ -3,9 +3,10 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, screen, session } from 'electron';
-import { clearEmailConfig, emailMessageAction, getEmailAccounts, getEmailAttachmentMetadata, getEmailConfig, saveEmailAttachment, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
+import { app, BrowserWindow, dialog, ipcMain, screen, session, shell } from 'electron';
+import { clearEmailConfig, emailBulkAction, emailMessageAction, getEmailAccounts, getEmailAttachmentMetadata, getEmailConfig, previewEmailAttachment, saveEmailAttachment, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
 import { createSetupStore } from './setup-store.mjs';
+import { openSafeExternalLink } from './external-link.mjs';
 import updater from 'electron-updater';
 const { autoUpdater } = updater;
 
@@ -56,6 +57,16 @@ ipcMain.handle('fieldstead:email-clear', async (_event, accountId) => clearEmail
 ipcMain.handle('fieldstead:email-sync', async (_event, accountId) => { try { return await syncEmail(accountId); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
 ipcMain.handle('fieldstead:email-send', async (_event, input, accountId) => { try { return await sendEmail(input, accountId); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
 ipcMain.handle('fieldstead:email-action', async (_event, accountId, uid, action) => { try { return await emailMessageAction(accountId, uid, action); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
+ipcMain.handle('fieldstead:email-bulk-action', async (_event, accountId, uids, action) => { try { return await emailBulkAction(accountId, uids, action); } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; } });
+ipcMain.handle('fieldstead:email-attachment-preview', async (_event, accountId, messageId, attachmentId) => {
+  try {
+    const preview = await previewEmailAttachment(accountId, messageId, attachmentId);
+    const error = await shell.openPath(preview.path);
+    return error ? { ok: false, message: error } : { ok: true, filename: preview.filename };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+});
 ipcMain.handle('fieldstead:email-attachment-save', async (_event, accountId, messageId, attachmentId) => {
   try {
     const attachment = await getEmailAttachmentMetadata(accountId, messageId, attachmentId);
@@ -72,8 +83,13 @@ ipcMain.handle('fieldstead:email-attachment-save', async (_event, accountId, mes
     return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }
 });
+ipcMain.handle('fieldstead:email-open-external-link', async (_event, url) => {
+  try { return await openSafeExternalLink(shell.openExternal, url); }
+  catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; }
+});
 ipcMain.handle('fieldstead:setup-get', () => createSetupStore(app.getPath('userData')).load());
 ipcMain.handle('fieldstead:setup-save', (_event, state) => createSetupStore(app.getPath('userData')).save(state));
+ipcMain.handle('fieldstead:app-version', () => app.getVersion());
 
 ipcMain.handle('fieldstead:check-for-updates', async () => {
   if (!app.isPackaged) return { status: 'development', message: 'Updates are checked from the packaged GitHub release.' };
@@ -218,7 +234,10 @@ function createWindow(serverUrl) {
     },
   });
 
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    void openSafeExternalLink(shell.openExternal, url).catch(() => undefined);
+    return { action: 'deny' };
+  });
   mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
     if (!isAllowedNavigationUrl(targetUrl, serverUrl)) event.preventDefault();
   });

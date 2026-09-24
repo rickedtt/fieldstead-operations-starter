@@ -22,6 +22,7 @@ describe('local email attachment storage', () => {
 
     expect(metadata).toEqual([expect.objectContaining({ id: 'attachment-1', filename: 'estimate.pdf', size: 11, available: true })]);
     await expect(store.save('account-a', '42', 'attachment-1', destination)).resolves.toEqual(expect.objectContaining({ bytes: 11 }));
+    await expect(store.preview('account-a', '42', 'attachment-1')).resolves.toEqual(expect.objectContaining({ filename: 'estimate.pdf', path: expect.stringMatching(/attachment-1\.pdf$/) }));
     await expect(readFile(destination, 'utf8')).resolves.toBe('local bytes');
     await expect(store.save('../account-a', '42', 'attachment-1', destination)).rejects.toThrow('Invalid attachment reference');
     await expect(store.save('account-a', '../42', 'attachment-1', destination)).rejects.toThrow('Invalid attachment reference');

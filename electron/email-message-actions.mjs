@@ -24,3 +24,12 @@ export async function performEmailMessageAction(client, uid, action) {
   requireMessageResult(result);
   return { ok: true, action, uid: range };
 }
+
+
+export async function performEmailMessageActions(client, uids, action) {
+  const normalized = [...new Set((uids || []).map(String).filter(Boolean))];
+  if (!normalized.length) throw new Error('Select at least one message.');
+  const range = normalized.join(',');
+  const result = await performEmailMessageAction(client, range, action);
+  return { ok: result.ok, action, uids: normalized };
+}

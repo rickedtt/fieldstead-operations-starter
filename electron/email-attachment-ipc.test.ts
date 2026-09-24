@@ -15,6 +15,23 @@ describe('email attachment IPC contract', () => {
     expect(main).not.toContain('showOpenDialog');
   });
 
+  it('previews allowlisted attachments through a narrow main-process IPC path', async () => {
+    const [preload, main, preview] = await Promise.all([
+      readFile(new URL('./preload.cjs', import.meta.url), 'utf8'),
+      readFile(new URL('./main.mjs', import.meta.url), 'utf8'),
+      import('./attachment-preview.mjs'),
+    ]);
+    expect(preload).toContain("previewEmailAttachment: (accountId, messageId, attachmentId)");
+    expect(preload).toContain("ipcRenderer.invoke('fieldstead:email-attachment-preview'");
+    expect(main).toContain("ipcMain.handle('fieldstead:email-attachment-preview'");
+    expect(main).toContain('previewEmailAttachment(accountId, messageId, attachmentId)');
+    expect(main).toContain('shell.openPath(preview.path)');
+    expect(preview.isPreviewableAttachment({ filename: 'photo.png', contentType: 'image/png' })).toBe(true);
+    expect(preview.isPreviewableAttachment({ filename: 'quote.pdf', contentType: 'application/pdf' })).toBe(true);
+    expect(preview.isPreviewableAttachment({ filename: 'attack.html', contentType: 'text/html' })).toBe(false);
+    expect(preview.isPreviewableAttachment({ filename: 'script.svg', contentType: 'image/svg+xml' })).toBe(false);
+  });
+
   it('packages the attachment parser and store for Linux and Windows builds', () => {
     expect(packageJson.build.files).toContain('electron/**/*');
     expect(packageJson.scripts['desktop:dist:all']).toContain('--linux AppImage');

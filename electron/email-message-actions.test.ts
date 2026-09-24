@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { performEmailMessageAction } from './email-message-actions.mjs';
+import { performEmailMessageAction, performEmailMessageActions } from './email-message-actions.mjs';
 
 function createClient(overrides: Record<string, unknown> = {}) {
   return {
@@ -52,5 +52,18 @@ describe('performEmailMessageAction', () => {
     expect(client.messageFlagsAdd).toHaveBeenNthCalledWith(2, '9281', ['\\Flagged'], { uid: true });
     expect(client.messageFlagsRemove).toHaveBeenNthCalledWith(2, '9281', ['\\Flagged'], { uid: true });
     expect(client.messageMove).toHaveBeenCalledWith('9281', 'Archive', { uid: true });
+  });
+});
+
+
+describe('performEmailMessageActions', () => {
+  it('applies a bulk action in UID mode and returns every affected UID', async () => {
+    const client = createClient({ messageFlagsAdd: vi.fn().mockResolvedValue(true) });
+    await expect(performEmailMessageActions(client, ['9281', '9282'], 'read')).resolves.toEqual({ ok: true, action: 'read', uids: ['9281', '9282'] });
+    expect(client.messageFlagsAdd).toHaveBeenCalledWith('9281,9282', ['\\Seen'], { uid: true });
+  });
+
+  it('rejects empty bulk selections', async () => {
+    await expect(performEmailMessageActions(createClient(), [], 'delete')).rejects.toThrow('Select at least one message.');
   });
 });

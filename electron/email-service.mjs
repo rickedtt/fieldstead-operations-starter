@@ -7,7 +7,7 @@ import { app, safeStorage } from 'electron';
 import { normalizeMailProvider, getMailProviderProfile } from '../lib/mail-provider-runtime.mjs';
 import { createAttachmentStore } from './attachment-store.mjs';
 import { parseMailContent } from './mail-content.mjs';
-import { performEmailMessageAction } from './email-message-actions.mjs';
+import { performEmailMessageAction, performEmailMessageActions } from './email-message-actions.mjs';
 
 const CONFIG_FILE = 'email-connection.json';
 const ATTACHMENT_DIRECTORY = 'email-attachments';
@@ -251,6 +251,11 @@ export async function getEmailAttachmentMetadata(accountId, messageId, attachmen
   return item;
 }
 
+export async function previewEmailAttachment(accountId, messageId, attachmentId) {
+  const { account } = await getAccount(accountId);
+  return attachmentStore().preview(account.id, messageId, attachmentId);
+}
+
 export async function saveEmailAttachment(accountId, messageId, attachmentId, destination) {
   const { account } = await getAccount(accountId);
   return attachmentStore().save(account.id, messageId, attachmentId, destination);
@@ -269,6 +274,24 @@ export async function emailMessageAction(accountId, uid, action) {
     }
   } catch (error) {
     throw new Error(`Email action failed: ${describeMailError(error)}`);
+  } finally {
+    try { await client.close(); } catch {}
+  }
+}
+
+export async function emailBulkAction(accountId, uids, action) {
+  const config = await getStoredEmailSecrets(accountId);
+  const client = new ImapFlow({ host: config.imap.host, port: config.imap.port, secure: config.imap.secure, auth: { user: config.username, pass: config.password }, logger: false });
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      return await performEmailMessageActions(client, uids, action);
+    } finally {
+      lock.release();
+    }
+  } catch (error) {
+    throw new Error(`Bulk email action failed: ${describeMailError(error)}`);
   } finally {
     try { await client.close(); } catch {}
   }
