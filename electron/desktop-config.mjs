@@ -1,5 +1,6 @@
 export const APP_ID = 'com.fieldstead.operations.starter';
 export const PRODUCT_NAME = 'Fieldstead Systems Operations Starter';
+export const WINDOW_BACKGROUND_COLOR = '#101714';
 export const LOOPBACK_HOST = '127.0.0.1';
 export const PREFERRED_PORT = 43127;
 

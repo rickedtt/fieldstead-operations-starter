@@ -25,6 +25,7 @@ import {
   LOOPBACK_HOST,
   PREFERRED_PORT,
   PRODUCT_NAME,
+  WINDOW_BACKGROUND_COLOR,
 } from './desktop-config.mjs';
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -224,7 +225,7 @@ function createWindow(serverUrl) {
     show: false,
     title: PRODUCT_NAME,
     autoHideMenuBar: true,
-    backgroundColor: '#17324d',
+    backgroundColor: WINDOW_BACKGROUND_COLOR,
     webPreferences: {
       preload: path.join(moduleDirectory, 'preload.cjs'),
       contextIsolation: true,

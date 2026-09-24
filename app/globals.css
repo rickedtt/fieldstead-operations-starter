@@ -183,3 +183,46 @@
 
 
 .email-bulk-toolbar{display:flex;align-items:center;min-height:46px;padding:6px 12px;border:1px solid var(--line);border-bottom:0;border-radius:11px 11px 0 0;background:var(--paper);gap:14px}.email-select-all{display:flex!important;align-items:center;gap:9px;margin:0!important;font-size:12px!important;font-weight:800}.email-select-all input,.email-row-checkbox{width:16px;height:16px;accent-color:var(--accent)}.email-bulk-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.email-bulk-actions button,.email-star-button{border:0;background:transparent;color:var(--muted);padding:7px 9px;border-radius:7px;font-weight:750}.email-bulk-actions button:hover,.email-star-button:hover{background:var(--sage);color:var(--text)}.email-list{border-radius:0 0 11px 11px}.email-row-shell{display:grid;grid-template-columns:28px 34px minmax(0,1fr);align-items:center;padding:0 10px}.email-row-checkbox{justify-self:center}.email-star-button{font-size:20px;color:#d29c25;padding:5px}.email-row-shell .email-message-summary{padding-left:4px}.email-selected{background:color-mix(in srgb,var(--accent) 10%,var(--card))!important}.email-message-card:has(.email-row-checkbox:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}@media(max-width:760px){.email-bulk-toolbar{align-items:flex-start;flex-direction:column}.email-row-shell{grid-template-columns:24px 30px minmax(0,1fr);padding:0 5px}.email-bulk-actions{width:100%}}
+
+
+.email-page,.finance-page{font-size:14px}.email-page h2,.finance-page h2{font-size:20px}.email-page .email-message-summary{font-size:13px}.email-page .email-message-summary strong,.email-page .email-message-summary b{font-size:12px}.email-page .email-message-details{font-size:13px}.email-page .email-message-details h3{font-size:15px}.email-page .primary,.email-page .secondary{min-height:38px;padding:8px 13px;font-size:12px}
+.email-page{width:100%;min-width:0}
+
+
+/* Read-only finance foundation built from existing job invoice fields. */
+.finance-page{display:grid;gap:20px;min-width:0}.finance-page>*{min-width:0}.finance-intro,.finance-card{padding:24px;border:1px solid var(--line);border-radius:13px;background:var(--card)}.finance-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}.finance-intro p:last-child,.finance-boundary>p{max-width:820px;margin:10px 0 0;color:var(--muted);line-height:1.55}.finance-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.finance-metrics article{min-width:0;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.finance-metrics p,.finance-metrics small{color:var(--muted)}.finance-metrics p{margin-bottom:8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}.finance-metrics strong{display:block;margin-bottom:5px;font:600 clamp(24px,3vw,34px) Georgia,serif}.finance-table{margin-top:18px;border:1px solid var(--line);border-radius:10px;overflow:hidden}.finance-table-head,.finance-row{display:grid;grid-template-columns:minmax(220px,2fr) minmax(100px,.7fr) minmax(130px,.8fr) minmax(90px,.6fr);align-items:center;gap:14px}.finance-table-head{padding:10px 14px;background:var(--paper);color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase}.finance-row{width:100%;padding:14px;border:0;border-top:1px solid var(--line);background:var(--card);text-align:left}.finance-row:hover{background:color-mix(in srgb,var(--sage) 24%,var(--card))}.finance-row span:first-child strong,.finance-row span:first-child small{display:block}.finance-row small{margin-top:4px;color:var(--muted)}.finance-row>strong{text-align:right}.finance-boundary{display:grid;grid-template-columns:minmax(220px,.6fr) minmax(0,1.4fr);gap:24px}.theme-dark .finance-intro,.theme-dark .finance-card,.theme-dark .finance-metrics article,.theme-dark .finance-row{background:var(--card);border-color:var(--line)}.theme-dark .finance-table-head{background:#202d27}.theme-dark .finance-row:hover{background:#20352b}@media(max-width:900px){.finance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.finance-table-head,.finance-row{grid-template-columns:minmax(180px,1.5fr) minmax(90px,.7fr) minmax(100px,.8fr)}.finance-table-head span:nth-child(3),.finance-row>span:nth-child(3){display:none}.finance-boundary{grid-template-columns:1fr}}@media(max-width:700px){.finance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.finance-intro{flex-direction:column}.finance-table-head{display:none}.finance-row{grid-template-columns:minmax(0,1fr) auto;gap:9px}.finance-row>span:nth-child(3){display:none}.finance-row>strong{grid-column:2;grid-row:2}.finance-card{padding:18px}}@media(max-width:430px){.finance-metrics{grid-template-columns:1fr}}
+
+/* Narrow previews must not let later desktop-shell rules resurrect the fixed sidebar. */
+@media(max-width:800px){.app-shell,.app-shell.sidebar-collapsed{display:block;min-width:0}.sidebar{display:none}.workspace{min-width:0;padding-bottom:70px}.mobile-brand{display:grid}.mobile-nav{display:grid!important}.content{width:min(100% - 28px,700px);margin:0 auto;padding:22px 0 40px}}
+
+
+/* Expanded mail and desktop resize regression guard. */
+html,body{max-width:100%;overflow-x:hidden}
+body{min-width:0}
+.app-shell,.workspace,.content,.email-page,.email-inbox-card,.email-list,.email-message-card,.email-row-shell,.email-message-summary,.email-message-details,.email-message-content,.email-message-body,.email-message-rich-body,.email-attachments,.email-attachment-grid{min-width:0;max-width:100%}
+.email-inbox-card{overflow:hidden}
+.email-message-card,.email-row-shell,.email-message-details{width:100%}
+.email-message-content{overflow:hidden}
+.email-message-body{font-size:13px;line-height:1.55;overflow-wrap:anywhere;word-break:break-word}
+.email-message-rich-body>*{max-width:100%}
+.email-message-body a{overflow-wrap:anywhere;word-break:break-word}
+.email-inline-image,.email-inline-image img,.email-inline-images figure,.email-inline-images img{max-width:100%}
+.email-attachment{grid-template-columns:auto minmax(0,1fr) minmax(0,auto);max-width:100%}
+.email-attachment-actions{min-width:0;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}
+.email-attachment-actions .secondary{max-width:100%;white-space:normal}
+.header-actions .desktop-only{display:inline-flex}
+@media(max-width:1000px){
+  .topbar{grid-template-columns:minmax(0,1fr) minmax(0,auto)}
+  .header-actions{max-width:none;overflow:visible;display:flex;flex-wrap:wrap}
+  .header-actions .desktop-only{display:inline-flex}
+  .header-actions .primary,.header-actions .secondary{min-height:36px;padding:7px 10px;font-size:11px}
+}
+@media(max-width:720px){
+  .topbar{grid-template-columns:minmax(0,1fr);align-items:start}
+  .header-actions{width:100%;justify-content:flex-start}
+  .header-actions .primary,.header-actions .secondary{flex:1 1 140px}
+  .email-message-details{padding:13px 12px 14px}
+  .email-attachment{grid-template-columns:auto minmax(0,1fr)}
+  .email-attachment-actions{grid-column:1/-1;justify-content:stretch}
+  .email-attachment-actions .secondary{flex:1 1 140px}
+}

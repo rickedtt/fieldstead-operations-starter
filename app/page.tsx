@@ -22,8 +22,9 @@ import type { SetupState } from './setup/setup-types';
 import { createInitialEmailUiState, reduceEmailUiState } from './email-ui-state';
 import { createEmailSyncController } from './email-sync-controller';
 import { EmailMessageContent, type EmailAttachment, type RenderableEmailMessage } from './email-message-content';
+import { buildFinanceSnapshot } from './finance';
 
-type View = 'Overview' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Email' | 'Settings';
+type View = 'Overview' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Email' | 'Finance' | 'Settings';
 type Theme = 'dark' | 'light';
 type EmailConnectionInput = { provider: string; email: string; displayName: string; username: string; password: string; imap: { host: string; port: number; secure: boolean }; smtp: { host: string; port: number; secure: boolean } };
 type EmailMessage = RenderableEmailMessage & { subject: string; from: string; fromName: string; receivedAt: string; unread: boolean; starred?: boolean };
@@ -242,7 +243,7 @@ export default function Home() {
         <div className="brand"><Image className="brand-logo brand-logo-full" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/><Image className="brand-logo-compact" src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems" priority/></div>
         <button className="sidebar-toggle" type="button" aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? '›' : '‹'}</button>
         <nav aria-label="Main navigation">
-          {(['Overview','Jobs','Customers','Activity','Client Delivery','Email','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Email: '✉', Settings: '⚙' } as Record<View, string>)[item]; return (
+          {(['Overview','Jobs','Customers','Activity','Client Delivery','Email','Finance','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Email: '✉', Finance: '$', Settings: '⚙' } as Record<View, string>)[item]; return (
             <button key={item} className={cx('nav-item', view === item && 'active')} onClick={() => setView(item)}>
               <span className="nav-icon" aria-hidden="true">{icon}</span><span className="nav-label">{item}</span>{item === 'Jobs' && <b>{openJobs.length}</b>}
             </button>
@@ -267,6 +268,7 @@ export default function Home() {
           {view === 'Activity' && <ActivityView state={state} openJob={setSelectedJobId} />}
           {view === 'Client Delivery' && <ClientDeliveryView state={state} applyImport={applyStagedImport} restore={restoreBackup} />}
           {view === 'Email' && <EmailView state={state} />}
+          {view === 'Finance' && <FinanceView state={state} />}
           {view === 'Settings' && <SettingsView theme={theme} setTheme={setTheme} migratePreviousData={() => void migratePreviousData()} reopenSetup={reopenSetup} />}
         </div>
 
@@ -280,6 +282,30 @@ export default function Home() {
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </main>
   );
+}
+
+function FinanceView({ state }: { state: OperationsState }) {
+  const snapshot = buildFinanceSnapshot(state);
+  return <div className="finance-page">
+    <section className="finance-intro">
+      <div><p className="eyebrow">FINANCE FOUNDATION</p><h2>Invoice and payment visibility</h2><p>Read-only local summary from the invoice fields already stored on Fieldstead jobs. No accounting provider, bank, payment processor, or customer account is connected.</p></div>
+      <span className="pill pill-pending">QuickBooks not connected</span>
+    </section>
+    <section className="finance-metrics" aria-label="Finance summary">
+      <article><p>Invoiced</p><strong>{money.format(snapshot.totals.invoiced)}</strong><small>Draft, sent, overdue, and paid</small></article>
+      <article><p>Outstanding</p><strong>{money.format(snapshot.totals.outstanding)}</strong><small>Excludes paid invoices</small></article>
+      <article><p>Overdue</p><strong>{money.format(snapshot.totals.overdue)}</strong><small>Manual bookkeeping status</small></article>
+      <article><p>Paid</p><strong>{money.format(snapshot.totals.paid)}</strong><small>Recorded locally on jobs</small></article>
+    </section>
+    <section className="finance-card">
+      <div className="section-title"><div><p className="eyebrow">INVOICE REGISTER</p><h2>Read-only local summary</h2></div><span className="safe-state">No external writes</span></div>
+      {snapshot.invoices.length ? <div className="finance-table" role="table" aria-label="Invoice register">
+        <div className="finance-table-head" role="row"><span>Customer / job</span><span>Status</span><span>Due</span><span>Amount</span></div>
+        {snapshot.invoices.map((invoice) => <div className="finance-row" role="row" key={invoice.jobId}><span><strong>{invoice.customerName}</strong><small>{invoice.service} · {invoice.jobId}</small></span><span><StatusPill>{invoice.status}</StatusPill></span><span>{invoice.paidAt ? `Paid ${dateOnly.format(new Date(invoice.paidAt))}` : invoice.dueAt ? dateOnly.format(new Date(invoice.dueAt)) : 'Not set'}</span><strong>{money.format(invoice.amount)}</strong></div>)}
+      </div> : <Empty title="No invoices yet" detail="Jobs with Draft, Sent, Overdue, or Paid invoice states will appear here."/>}
+    </section>
+    <section className="finance-card finance-boundary"><div><p className="eyebrow">QUICKBOOKS ROADMAP</p><h2>Connection remains gated</h2></div><p>Future phases can add reviewed OAuth, company selection, mapping, import previews, idempotent sync, reconciliation, audit history, and disconnect controls. This foundation does not request credentials or make provider calls.</p></section>
+  </div>;
 }
 
 function EmailView({ state }: { state: OperationsState }) {

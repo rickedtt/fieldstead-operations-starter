@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import packageJson from '../package.json';
 import {
@@ -7,6 +8,7 @@ import {
   localServerUrl,
   LOOPBACK_HOST,
   PRODUCT_NAME,
+  WINDOW_BACKGROUND_COLOR,
 } from './desktop-config.mjs';
 
 describe('desktop loopback policy', () => {
@@ -78,5 +80,14 @@ describe('electron-builder metadata', () => {
 
   it('packages the mail provider runtime at the path imported by Electron', () => {
     expect(packageJson.build.files).toContain('lib/mail-provider-runtime.mjs');
+  });
+});
+
+
+describe('desktop window appearance', () => {
+  it('uses the renderer dark surface while resizing', () => {
+    expect(WINDOW_BACKGROUND_COLOR).toBe('#101714');
+    const mainSource = readFileSync(new URL('./main.mjs', import.meta.url), 'utf8');
+    expect(mainSource).toContain('backgroundColor: WINDOW_BACKGROUND_COLOR');
   });
 });
