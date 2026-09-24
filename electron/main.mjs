@@ -6,15 +6,9 @@ import fsSync from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, screen, session, shell } from 'electron';
 
-// Omarchy compatibility: avoid Chromium's unusable GPU process before startup.
-for (const [name, value] of [
-  ['disable-gpu', undefined],
-  ['disable-gpu-compositing', undefined],
-  ['disable-features', 'UseOzonePlatform'],
-  ['ozone-platform', 'x11'],
-]) {
-  app.commandLine.appendSwitch(name, value);
-}
+// Omarchy compatibility: use X11 without disabling every Chromium fallback.
+// In particular, do not combine --disable-gpu with --disable-software-rasterizer.
+app.commandLine.appendSwitch('ozone-platform', 'x11');
 import { clearEmailConfig, emailBulkAction, emailMessageAction, getEmailAccounts, getEmailAttachmentMetadata, getEmailConfig, previewEmailAttachment, saveEmailAttachment, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
 import { createSetupStore } from './setup-store.mjs';
 import { openSafeExternalLink } from './external-link.mjs';
