@@ -125,8 +125,21 @@ export default function Home() {
   const [uiState, setUiState] = useState<OperationsState>(seedState);
   const localJobs = useFieldsteadLocalJobs(seedState.jobs);
   const state = useMemo(
-    () => ({ ...uiState, jobs: localJobs.jobs }),
-    [uiState, localJobs.jobs],
+    () => ({
+      ...uiState,
+      customers: localJobs.customers.map((customer) => ({
+        id: customer.id,
+        name: customer.displayName,
+        phone: customer.primaryPhone || '',
+        email: customer.primaryEmail || '',
+        address: customer.serviceAddress || '',
+        notes: '',
+        createdAt: customer.audit.createdAt,
+      })),
+      jobs: localJobs.jobs,
+      activity: localJobs.activity,
+    }),
+    [uiState, localJobs.customers, localJobs.jobs, localJobs.activity],
   );
   const [view, setView] = useState<View>('Overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -305,7 +318,29 @@ export default function Home() {
       {selectedJob && <JobDrawer state={state} job={selectedJob} localData={localJobs} close={() => setSelectedJobId(undefined)} save={(next,message) => mutate(next,message)} />}
       {selectedCustomer && <CustomerDrawer state={state} customer={selectedCustomer} close={() => setSelectedCustomerId(undefined)} openJob={(id) => { setSelectedCustomerId(undefined); setSelectedJobId(id); }} remove={() => removeCustomer(selectedCustomer.id)} />}
       {modal === 'job' && <NewJobModal state={state} close={() => setModal(null)} save={saveNewJob} />}
-      {modal === 'customer' && <NewCustomerModal state={state} close={() => setModal(null)} save={(next) => { mutate(next,'Customer added'); setModal(null); }} />}
+      {modal === 'customer' && <NewCustomerModal state={state} close={() => setModal(null)} save={(next) => {
+        const customer = next.customers.find((candidate) => !state.customers.some((existing) => existing.id === candidate.id));
+        const activity = next.activity.find((candidate) => candidate.customerId === customer?.id);
+        if (!customer || !activity) return;
+        const durableCustomer: DurableCustomer = {
+          id: customer.id,
+          displayName: customer.name,
+          primaryEmail: customer.email || undefined,
+          primaryPhone: customer.phone || undefined,
+          serviceAddress: customer.address || undefined,
+          sourceEmail: {
+            accountId: 'manual-entry',
+            messageId: `manual:${customer.id}`,
+            normalizedFrom: customer.email.trim().toLowerCase() || `manual:${customer.id}`,
+          },
+          audit: { createdAt: customer.createdAt, createdBy: 'Fieldstead owner', updatedAt: customer.createdAt, updatedBy: 'Fieldstead owner' },
+        };
+        setModal(null);
+        setToast('Customer added');
+        void localJobs.createCustomer(durableCustomer, activity).catch((error: unknown) => {
+          setToast(error instanceof Error ? `Could not save customer: ${error.message}` : 'Could not save customer');
+        });
+      }} />}
       {setupOpen && setupState && <SetupWizard state={setupState} onChange={setSetupState} onSave={saveSetup} onClose={() => setSetupOpen(false)} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </main>

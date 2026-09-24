@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Customer, Job, ServiceRequest } from '../../packages/fieldstead-domain/src';
+import type { ActivityEvent, Customer, Job, ServiceRequest } from '../../packages/fieldstead-domain/src';
 import {
   createFieldsteadRepository,
   type FieldsteadRepository,
@@ -82,6 +82,49 @@ afterEach(async () => {
 });
 
 describe('LocalJobsStore', () => {
+  it('hydrates customers and activity alongside jobs without erasing existing durable records', async () => {
+    const { repository, store } = setup([]);
+    const existingCustomer = customer();
+    const existingActivity: ActivityEvent = {
+      id: 'activity-existing', at: '2026-09-24T12:30:00.000Z', customerId: existingCustomer.id,
+      actor: 'Fieldstead owner', action: 'Customer reviewed', detail: 'Existing durable activity.',
+    };
+    await repository.open();
+    await repository.createCustomer(existingCustomer);
+    await repository.activityEvents.add(existingActivity);
+
+    await store.start();
+    await waitFor(() => expect(store.getSnapshot().loading).toBe(false));
+
+    expect(store.getSnapshot()).toMatchObject({
+      customers: [existingCustomer],
+      activity: [existingActivity],
+    });
+    await expect(repository.customers.count()).resolves.toBe(1);
+    await expect(repository.activityEvents.count()).resolves.toBe(1);
+    store.stop();
+  });
+
+  it('creates a durable customer and activity event with a pending local outbox operation', async () => {
+    const { repository, store } = setup([]);
+    await store.start();
+    const created = customer();
+    const activity: ActivityEvent = {
+      id: 'activity-customer-create', at: '2026-09-24T12:00:00.000Z', customerId: created.id,
+      actor: 'Fieldstead owner', action: 'Customer added', detail: 'Jamie Rivera was added to the local customer list.',
+    };
+
+    await store.createCustomer(created, activity);
+
+    expect(store.getSnapshot().customers).toEqual([created]);
+    expect(store.getSnapshot().activity).toEqual([activity]);
+    await expect(repository.getCustomer(created.id)).resolves.toEqual(created);
+    await expect(repository.listPendingOperations()).resolves.toContainEqual(expect.objectContaining({
+      entityType: 'customer', entityId: created.id, kind: 'customer.create',
+    }));
+    store.stop();
+  });
+
   it('uses synthetic jobs until repository hydration and seeds an empty database', async () => {
     const { repository, store } = setup();
 

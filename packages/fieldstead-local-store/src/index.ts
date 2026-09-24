@@ -37,6 +37,13 @@ export type JobCreation = {
   activityEvent?: ActivityEvent;
 };
 
+export type CustomerCreation = {
+  customer: Customer;
+  operationId: string;
+  occurredAt: string;
+  activityEvent: ActivityEvent;
+};
+
 export type CustomerUpdate = {
   customerId: string;
   changes: Partial<Pick<Customer, 'displayName' | 'primaryEmail'>>;
@@ -198,6 +205,18 @@ export class FieldsteadRepository extends Dexie {
     return this.customers.orderBy('audit.updatedAt').reverse().toArray();
   }
 
+  observeCustomers(): Observable<Customer[]> {
+    return liveQuery(() => this.listCustomers());
+  }
+
+  listActivityEvents(): Promise<ActivityEvent[]> {
+    return this.activityEvents.orderBy('at').reverse().toArray();
+  }
+
+  observeActivityEvents(): Observable<ActivityEvent[]> {
+    return liveQuery(() => this.listActivityEvents());
+  }
+
   async convertEmailIntake(input: EmailIntakeConversion): Promise<{ replayed: boolean; customer?: Customer; serviceRequest?: ServiceRequest }> {
     const customer = input.customer ? parseCustomer(input.customer) : undefined;
     const serviceRequest = input.serviceRequest ? parseServiceRequest(input.serviceRequest) : undefined;
@@ -244,6 +263,32 @@ export class FieldsteadRepository extends Dexie {
       await this.customers.add(customer);
       return customer;
     });
+  }
+
+  async createCustomerRecord(creation: CustomerCreation): Promise<Customer> {
+    const customer = parseCustomer(creation.customer);
+    const event = parseActivityEvent(creation.activityEvent);
+    const operation = parseOutboxOperation({
+      id: creation.operationId,
+      entityType: 'customer',
+      entityId: customer.id,
+      kind: 'customer.create',
+      payload: { ...customer },
+      createdAt: creation.occurredAt,
+      status: 'pending',
+    });
+    return this.transaction(
+      'rw',
+      this.customers,
+      this.activityEvents,
+      this.outboxOperations,
+      async () => {
+        await this.customers.add(customer);
+        await this.activityEvents.add(event);
+        await this.outboxOperations.add(operation);
+        return customer;
+      },
+    );
   }
 
   async createServiceRequest(value: ServiceRequest): Promise<ServiceRequest> {

@@ -17,6 +17,8 @@ export const FIELDSTEAD_DATABASE_NAME =
 
 export type LocalJobsSnapshot = {
   jobs: Job[];
+  customers: DurableCustomer[];
+  activity: ActivityEvent[];
   loading: boolean;
   error: Error | null;
 };
@@ -45,6 +47,8 @@ export class LocalJobsStore {
   private readonly listeners = new Set<() => void>();
   private repository?: FieldsteadRepository;
   private observation?: { unsubscribe(): void };
+  private customerObservation?: { unsubscribe(): void };
+  private activityObservation?: { unsubscribe(): void };
   private starting?: Promise<void>;
   private snapshot: LocalJobsSnapshot;
 
@@ -57,6 +61,8 @@ export class LocalJobsStore {
     this.now = options.now ?? (() => new Date().toISOString());
     this.snapshot = {
       jobs: structuredClone(this.fallbackJobs),
+      customers: [],
+      activity: [],
       loading: true,
       error: null,
     };
@@ -85,13 +91,21 @@ export class LocalJobsStore {
         await repository.open();
         await repository.seedJobsIfEmpty(this.fallbackJobs);
         this.observation = repository.observeJobs().subscribe({
-          next: (jobs) => this.update({ jobs, loading: false, error: null }),
+          next: (jobs) => this.update({ ...this.snapshot, jobs, loading: false, error: null }),
           error: (error) =>
             this.update({
               ...this.snapshot,
               loading: false,
               error: asError(error),
             }),
+        });
+        this.customerObservation = repository.observeCustomers().subscribe({
+          next: (customers) => this.update({ ...this.snapshot, customers, error: null }),
+          error: (error) => this.update({ ...this.snapshot, error: asError(error) }),
+        });
+        this.activityObservation = repository.observeActivityEvents().subscribe({
+          next: (activity) => this.update({ ...this.snapshot, activity, error: null }),
+          error: (error) => this.update({ ...this.snapshot, error: asError(error) }),
         });
       } catch (error) {
         this.update({
@@ -109,7 +123,11 @@ export class LocalJobsStore {
 
   stop(): void {
     this.observation?.unsubscribe();
+    this.customerObservation?.unsubscribe();
+    this.activityObservation?.unsubscribe();
     this.observation = undefined;
+    this.customerObservation = undefined;
+    this.activityObservation = undefined;
   }
 
   async mutateJob(
@@ -130,6 +148,7 @@ export class LocalJobsStore {
       updatedAt: occurredAt,
     };
     this.update({
+      ...this.snapshot,
       jobs: previousJobs.map((job) => (job.id === jobId ? optimistic : job)),
       loading: this.snapshot.loading,
       error: null,
@@ -148,6 +167,7 @@ export class LocalJobsStore {
       return updated;
     } catch (error) {
       this.update({
+        ...this.snapshot,
         jobs: previousJobs,
         loading: false,
         error: asError(error),
@@ -158,7 +178,7 @@ export class LocalJobsStore {
 
   async createJob(job: Job, activityEvent?: ActivityEvent): Promise<Job> {
     const previousJobs = this.snapshot.jobs;
-    this.update({ jobs: [job, ...previousJobs], loading: false, error: null });
+    this.update({ ...this.snapshot, jobs: [job, ...previousJobs], loading: false, error: null });
 
     try {
       await this.start();
@@ -172,8 +192,37 @@ export class LocalJobsStore {
       return created;
     } catch (error) {
       this.update({
+        ...this.snapshot,
         jobs: previousJobs,
         loading: false,
+        error: asError(error),
+      });
+      throw error;
+    }
+  }
+
+  async createCustomer(customer: DurableCustomer, activityEvent: ActivityEvent): Promise<DurableCustomer> {
+    const previousCustomers = this.snapshot.customers;
+    const previousActivity = this.snapshot.activity;
+    this.update({
+      ...this.snapshot,
+      customers: [customer, ...previousCustomers],
+      activity: [activityEvent, ...previousActivity],
+      error: null,
+    });
+    try {
+      await this.start();
+      return await this.repository!.createCustomerRecord({
+        customer,
+        activityEvent,
+        operationId: this.createOperationId(),
+        occurredAt: activityEvent.at,
+      });
+    } catch (error) {
+      this.update({
+        ...this.snapshot,
+        customers: previousCustomers,
+        activity: previousActivity,
         error: asError(error),
       });
       throw error;
@@ -194,6 +243,7 @@ export class LocalJobsStore {
     await this.start();
     const converted = await this.repository!.convertServiceRequestToJob(input);
     this.update({
+      ...this.snapshot,
       jobs: [converted.job, ...this.snapshot.jobs.filter((job) => job.id !== converted.job.id)],
       loading: false,
       error: null,
@@ -246,6 +296,7 @@ export class LocalJobsStore {
   async replaceDemoJobs(jobs: Job[]): Promise<void> {
     const previousJobs = this.snapshot.jobs;
     this.update({
+      ...this.snapshot,
       jobs: structuredClone(jobs),
       loading: false,
       error: null,
@@ -254,7 +305,7 @@ export class LocalJobsStore {
       await this.start();
       await this.repository!.restoreSeedJobs(jobs);
     } catch (error) {
-      this.update({ jobs: previousJobs, loading: false, error: asError(error) });
+      this.update({ ...this.snapshot, jobs: previousJobs, loading: false, error: asError(error) });
       throw error;
     }
   }
@@ -284,6 +335,7 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     ...snapshot,
     mutateJob: store.mutateJob.bind(store),
     createJob: store.createJob.bind(store),
+    createCustomer: store.createCustomer.bind(store),
     listDurableCustomers: store.listDurableCustomers.bind(store),
     getDurableServiceRequest: store.getDurableServiceRequest.bind(store),
     convertEmailIntake: store.convertEmailIntake.bind(store),
