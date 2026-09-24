@@ -81,7 +81,7 @@ function sanitizeHtmlBody(html, imagesByCid) {
         const image = imagesByCid.get(cid);
         if (image) parts.push({ type: 'image', imageId: image.id, filename: image.filename, contentType: image.contentType, dataUrl: image.dataUrl });
         else appendText(parts, `[Inline image unavailable: ${cid || 'unknown'}]`);
-      } else appendText(parts, '[External image blocked]');
+      } else appendText(parts, '[External image omitted for privacy — open images to load it]');
       continue;
     }
     if (/^<br\b/i.test(token)) appendText(parts, '\n');

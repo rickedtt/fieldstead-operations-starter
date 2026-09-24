@@ -2,8 +2,19 @@ import { spawn } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
+import fsSync from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, screen, session, shell } from 'electron';
+
+// Omarchy compatibility: avoid Chromium's unusable GPU process before startup.
+for (const [name, value] of [
+  ['disable-gpu', undefined],
+  ['disable-gpu-compositing', undefined],
+  ['disable-features', 'UseOzonePlatform'],
+  ['ozone-platform', 'x11'],
+]) {
+  app.commandLine.appendSwitch(name, value);
+}
 import { clearEmailConfig, emailBulkAction, emailMessageAction, getEmailAccounts, getEmailAttachmentMetadata, getEmailConfig, previewEmailAttachment, saveEmailAttachment, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
 import { createSetupStore } from './setup-store.mjs';
 import { openSafeExternalLink } from './external-link.mjs';
@@ -120,6 +131,14 @@ function serverRoot() {
     : path.resolve(moduleDirectory, '..', 'dist', 'standalone');
 }
 
+function serverEntrypoint(root) {
+  const candidates = [
+    path.join(root, 'server.js'),
+    path.join(root, 'dist', 'server', 'index.js'),
+  ];
+  return candidates.find((candidate) => fsSync.existsSync(candidate)) ?? candidates[0];
+}
+
 function tryPort(port) {
   return new Promise((resolve, reject) => {
     const probe = net.createServer();
@@ -146,7 +165,8 @@ async function selectLoopbackPort() {
 
 function startServer(port) {
   const root = serverRoot();
-  const entrypoint = path.join(root, 'server.js');
+  const entrypoint = serverEntrypoint(root);
+  if (!fsSync.existsSync(entrypoint)) throw new Error(`Desktop server entrypoint missing: ${entrypoint}`);
 
   serverProcess = spawn(process.execPath, [entrypoint], {
     cwd: root,

@@ -86,7 +86,7 @@ describe('mail MIME content', () => {
     expect(result.body).toEqual([
       { type: 'text', value: 'Hello bad ' },
       { type: 'link', value: 'safe', href: 'http://safe.example/' },
-      { type: 'text', value: '[External image blocked][Inline image unavailable: missing]' },
+      { type: 'text', value: '[External image omitted for privacy — open images to load it][Inline image unavailable: missing]' },
     ]);
     expect(JSON.stringify(result)).not.toMatch(/script|onclick|onerror|tracker\.example|javascript:/i);
   });
