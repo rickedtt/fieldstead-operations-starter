@@ -58,6 +58,39 @@ describe('mail MIME content', () => {
     expect(JSON.stringify(result)).not.toContain('steal()');
   });
 
+  it('preserves text-image-text order and multiple CID image positions in sanitized body content', () => {
+    const result = parseMailContent({
+      html: '<p>Before <a href="https://safe.example/job">job</a></p><img src="cid:first"><p>Between</p><img src="CID:second"><p>After</p>',
+      attachments: [
+        { filename: 'first.png', contentType: 'image/png', contentId: '<first>', content: Buffer.from('first') },
+        { filename: 'second.jpg', contentType: 'image/jpeg', contentId: 'second', content: Buffer.from('second') },
+      ],
+    });
+
+    expect(result.body).toEqual([
+      { type: 'text', value: 'Before ' },
+      { type: 'link', value: 'job', href: 'https://safe.example/job' },
+      expect.objectContaining({ type: 'image', imageId: 'attachment-1', filename: 'first.png' }),
+      { type: 'text', value: 'Between' },
+      expect.objectContaining({ type: 'image', imageId: 'attachment-2', filename: 'second.jpg' }),
+      { type: 'text', value: 'After' },
+    ]);
+  });
+
+  it('blocks active HTML and external resources while retaining safe links and missing CID fallbacks', () => {
+    const result = parseMailContent({
+      html: '<script>alert(1)</script><style>bad</style><p onclick="evil()">Hello <a href="javascript:evil()">bad</a> <a href="http://safe.example">safe</a></p><img src="https://tracker.example/pixel"><img src="cid:missing" onerror="evil()">',
+      attachments: [],
+    });
+
+    expect(result.body).toEqual([
+      { type: 'text', value: 'Hello bad ' },
+      { type: 'link', value: 'safe', href: 'http://safe.example/' },
+      { type: 'text', value: '[External image blocked][Inline image unavailable: missing]' },
+    ]);
+    expect(JSON.stringify(result)).not.toMatch(/script|onclick|onerror|tracker\.example|javascript:/i);
+  });
+
   it('keeps regular attachment metadata without putting bytes in the render model', () => {
     const result = parseMailContent({
       text: 'Invoice attached',
@@ -82,7 +115,7 @@ describe('mail MIME content', () => {
   });
 
   it('handles HTML-only, malformed, and absent content without executing markup', () => {
-    expect(parseMailContent(undefined)).toEqual({ text: '', inlineImages: [], attachments: [], files: [] });
+    expect(parseMailContent(undefined)).toEqual({ text: '', body: [], inlineImages: [], attachments: [], files: [] });
     const result = parseMailContent({
       html: '<style>body{display:none}</style><h1>Hello &amp; welcome</h1><script>alert(1)</script><p>Details</p>',
       attachments: [{ filename: '', contentType: '', content: null }],

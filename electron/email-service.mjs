@@ -232,6 +232,7 @@ export async function syncEmail(accountId) {
           fromName: message.envelope?.from?.[0]?.name || '',
           receivedAt: message.envelope?.date?.toISOString?.() || new Date().toISOString(),
           text: content.text.slice(0, 20000),
+          body: content.body,
           inlineImages: content.inlineImages,
           attachments: content.attachments,
           unread: !message.flags?.has?.('\\Seen'),

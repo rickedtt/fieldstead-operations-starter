@@ -39,6 +39,25 @@ describe('email message content rendering', () => {
     expect(html).toContain('Inline image: Signature');
   });
 
+  it('renders body text and multiple inline images in their original sequence', () => {
+    const html = renderToStaticMarkup(<EmailMessageContent message={{
+      id: 'ordered', text: 'Before Between After',
+      body: [
+        { type: 'text', value: 'Before' },
+        { type: 'image', imageId: 'one', filename: 'one.png', contentType: 'image/png', dataUrl: 'data:image/png;base64,b25l' },
+        { type: 'text', value: 'Between' },
+        { type: 'image', imageId: 'two', filename: 'two.png', contentType: 'image/png', dataUrl: 'data:image/png;base64,dHdv' },
+        { type: 'text', value: 'After' },
+      ],
+      inlineImages: [], attachments: [],
+    }} onOpenExternalLink={vi.fn()} onPreviewAttachment={vi.fn()} onSaveAttachment={vi.fn()} />);
+    expect(html.indexOf('Before')).toBeLessThan(html.indexOf('src="data:image/png;base64,b25l"'));
+    expect(html.indexOf('src="data:image/png;base64,b25l"')).toBeLessThan(html.indexOf('Between'));
+    expect(html.indexOf('Between')).toBeLessThan(html.indexOf('src="data:image/png;base64,dHdv"'));
+    expect(html.indexOf('src="data:image/png;base64,dHdv"')).toBeLessThan(html.indexOf('After'));
+    expect(html).not.toContain('email-inline-images');
+  });
+
   it('renders downloadable metadata and disables missing content', () => {
     const html = renderToStaticMarkup(<EmailMessageContent message={{
       id: '9', text: '', inlineImages: [], attachments: [

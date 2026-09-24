@@ -33,6 +33,68 @@ function normalizeContentId(value) {
   return text(value).trim().replace(/^<|>$/g, '').toLowerCase();
 }
 
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(decodeEntities(text(value).trim()));
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch { return ''; }
+}
+
+function attribute(tag, name) {
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
+  return decodeEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? '');
+}
+
+function appendText(parts, value) {
+  if (!value) return;
+  const clean = decodeEntities(value);
+  const previous = parts.at(-1);
+  if (previous?.type === 'text') previous.value += clean;
+  else parts.push({ type: 'text', value: clean });
+}
+
+function sanitizeHtmlBody(html, imagesByCid) {
+  const parts = [];
+  const source = text(html)
+    .replace(/<(script|style|template|noscript|iframe|object|embed|svg|math)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<!--([\s\S]*?)-->/g, '');
+  const tokens = source.split(/(<[^>]*>)/g);
+  let activeLink = null;
+  for (const token of tokens) {
+    if (!token) continue;
+    if (token[0] !== '<') {
+      const value = decodeEntities(token);
+      if (activeLink) {
+        const previous = parts.at(-1);
+        if (previous?.type === 'link' && previous.href === activeLink) previous.value += value;
+        else parts.push({ type: 'link', value, href: activeLink });
+      } else appendText(parts, value);
+      continue;
+    }
+    if (/^<a\b/i.test(token)) { activeLink = safeHttpUrl(attribute(token, 'href')) || null; continue; }
+    if (/^<\/a\s*>/i.test(token)) { activeLink = null; continue; }
+    if (/^<img\b/i.test(token)) {
+      const src = attribute(token, 'src');
+      const cidMatch = src.match(/^cid\s*:\s*(.+)$/i);
+      if (cidMatch) {
+        const cid = normalizeContentId(cidMatch[1]);
+        const image = imagesByCid.get(cid);
+        if (image) parts.push({ type: 'image', imageId: image.id, filename: image.filename, contentType: image.contentType, dataUrl: image.dataUrl });
+        else appendText(parts, `[Inline image unavailable: ${cid || 'unknown'}]`);
+      } else appendText(parts, '[External image blocked]');
+      continue;
+    }
+    if (/^<br\b/i.test(token)) appendText(parts, '\n');
+    else if (/^<li\b/i.test(token)) appendText(parts, '• ');
+  }
+  for (const part of parts) if (part.type !== 'image') part.value = part.value.replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n');
+  while (parts[0]?.type === 'text' && !parts[0].value) parts.shift();
+  while (parts.at(-1)?.type === 'text' && !parts.at(-1).value) parts.pop();
+  if (parts[0]?.type === 'text') parts[0].value = parts[0].value.replace(/^\n+/, '');
+  if (parts.at(-1)?.type === 'text') parts.at(-1).value = parts.at(-1).value.replace(/\n+$/, '');
+  return parts.filter((part) => part.type === 'image' || part.value);
+}
+
 export function safeAttachmentFilename(value, index = 1) {
   const basename = text(value).replaceAll('\\', '/').split('/').pop()?.trim() || `attachment-${index}`;
   let safe = basename.replace(/[\u0000-\u001f<>:"/\\|?*]+/g, '_').replace(/[. ]+$/g, '').slice(0, 180);
@@ -48,7 +110,7 @@ function attachmentBuffer(value) {
 }
 
 export function parseMailContent(parsed) {
-  if (!parsed || typeof parsed !== 'object') return { text: '', inlineImages: [], attachments: [], files: [] };
+  if (!parsed || typeof parsed !== 'object') return { text: '', body: [], inlineImages: [], attachments: [], files: [] };
   const html = text(parsed.html);
   const referencedCids = new Set();
   for (const match of html.matchAll(/\bcid\s*:\s*([^\s"'<>]+)/gi)) referencedCids.add(normalizeContentId(match[1]));
@@ -83,5 +145,7 @@ export function parseMailContent(parsed) {
     }
   });
 
-  return { text: body, inlineImages, attachments, files };
+  const imagesByCid = new Map(inlineImages.map((image) => [image.contentId, image]));
+  const sanitizedBody = html ? sanitizeHtmlBody(html, imagesByCid) : [];
+  return { text: body, body: sanitizedBody, inlineImages, attachments, files };
 }

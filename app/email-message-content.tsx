@@ -18,6 +18,10 @@ export type EmailInlineImage = Omit<EmailAttachment, 'available'> & {
 };
 
 export type EmailTextPart = { type: 'text' | 'link'; value: string };
+export type EmailBodyPart =
+  | { type: 'text'; value: string }
+  | { type: 'link'; value: string; href: string }
+  | { type: 'image'; imageId: string; filename: string; contentType: string; dataUrl: string };
 
 const HTTP_LINK_PATTERN = /https?:\/\/[^\s<>]+/gi;
 const TRAILING_LINK_PUNCTUATION = /[.,!?;:)}\]>'"]+$/;
@@ -42,6 +46,7 @@ export function linkifyEmailText(text: string): EmailTextPart[] {
 export type RenderableEmailMessage = {
   id: string;
   text: string;
+  body?: EmailBodyPart[];
   inlineImages?: EmailInlineImage[];
   attachments?: EmailAttachment[];
 };
@@ -61,11 +66,21 @@ export function EmailMessageContent({ message, onOpenExternalLink, onPreviewAtta
 }) {
   const inlineImages = message.inlineImages || [];
   const attachments = message.attachments || [];
+  const body = message.body || [];
+  const hasStructuredBody = body.length > 0;
   return <div className="email-message-content">
-    {message.text ? <p className="email-message-body">{linkifyEmailText(message.text).map((part, index) => part.type === 'link'
+    {hasStructuredBody ? <div className="email-message-body email-message-rich-body">{body.map((part, index) => {
+      if (part.type === 'link') return <a key={`${index}-${part.href}`} href={part.href} onClick={(event) => { event.preventDefault(); onOpenExternalLink(part.href); }}>{part.value}</a>;
+      if (part.type === 'image') return <span className="email-inline-image" key={`${index}-${part.imageId}`}>
+        {/* MIME is restricted to a small raster allowlist before this data URL reaches the renderer. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={part.dataUrl} alt={`Inline image: ${part.filename}`} loading="lazy" />
+      </span>;
+      return <span key={`${index}-${part.value}`}>{part.value}</span>;
+    })}</div> : message.text ? <p className="email-message-body">{linkifyEmailText(message.text).map((part, index) => part.type === 'link'
       ? <a key={`${index}-${part.value}`} href={part.value} onClick={(event) => { event.preventDefault(); onOpenExternalLink(part.value); }}>{part.value}</a>
       : <span key={`${index}-${part.value}`}>{part.value}</span>)}</p> : inlineImages.length === 0 && <p className="email-message-empty">No message content available.</p>}
-    {inlineImages.length > 0 && <div className="email-inline-images">
+    {!hasStructuredBody && inlineImages.length > 0 && <div className="email-inline-images">
       {inlineImages.map((image) => <figure key={image.id}>
         {/* MIME is restricted to a small raster allowlist before this data URL reaches the renderer. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
