@@ -79,4 +79,20 @@ describe('customer and service request records', () => {
       sourceEmail: { accountId: 'mailbox-1' }, audit,
     })).toThrow(/SourceEmailIdentity\.messageId/);
   });
+
+  it('parses durable service-request linkage on converted requests and jobs', () => {
+    expect(parseServiceRequest({
+      id: 'request-1', customerId: 'customer-1', summary: 'Gutter cleaning request',
+      details: 'Please clean the gutters before October.', status: 'converted',
+      convertedJobId: 'HP-2001', sourceEmail, audit,
+    })).toMatchObject({ status: 'converted', convertedJobId: 'HP-2001' });
+
+    expect(parseJob({
+      id: 'HP-2001', customerId: 'customer-1', serviceRequestId: 'request-1',
+      service: 'Gutter cleaning request', description: 'Please clean the gutters before October.',
+      quoteStatus: 'Draft', quoteAmount: 0, durationHours: 0, crew: 'Unassigned',
+      status: 'Quoted', invoiceStatus: 'Not created', invoiceAmount: 0,
+      createdAt: audit.createdAt, updatedAt: audit.updatedAt,
+    })).toMatchObject({ serviceRequestId: 'request-1' });
+  });
 });

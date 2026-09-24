@@ -250,4 +250,60 @@ describe('durable customer and service request records', () => {
     await expect(repo.activityEvents.count()).resolves.toBe(1);
     await expect(repo.outboxOperations.count()).resolves.toBe(1);
   });
+
+  it('atomically converts an approved request to one linked draft job and replays duplicate confirmation', async () => {
+    const repo = await repository();
+    await repo.createCustomer(sampleCustomer());
+    await repo.createServiceRequest(sampleServiceRequest({ status: 'reviewed' }));
+    const input = {
+      serviceRequestId: 'request-1', jobId: 'HP-2001', operationId: 'request-to-job-1',
+      actorId: 'owner-1', actorRole: 'owner_admin' as const,
+      occurredAt: '2026-09-24T14:00:00.000Z', auditEventId: 'audit-request-to-job-1',
+    };
+
+    const first = await repo.convertServiceRequestToJob(input);
+    expect(first.replayed).toBe(false);
+    expect(first.job).toMatchObject({
+      id: 'HP-2001', customerId: 'customer-1', serviceRequestId: 'request-1',
+      service: 'Gutter cleaning request', quoteStatus: 'Draft', quoteAmount: 0,
+      status: 'Quoted', invoiceStatus: 'Not created', invoiceAmount: 0,
+    });
+    await expect(repo.getServiceRequest('request-1')).resolves.toMatchObject({
+      status: 'converted', convertedJobId: 'HP-2001',
+      audit: { updatedAt: input.occurredAt, updatedBy: 'owner-1' },
+    });
+    await expect(repo.activityEvents.get(input.auditEventId)).resolves.toMatchObject({
+      jobId: 'HP-2001', customerId: 'customer-1', actor: 'owner-1',
+      action: 'Service request converted to job',
+    });
+    await expect(repo.outboxOperations.get(input.operationId)).resolves.toMatchObject({
+      entityType: 'job', entityId: 'HP-2001', kind: 'job.create-from-service-request',
+    });
+
+    const replay = await repo.convertServiceRequestToJob(input);
+    expect(replay).toMatchObject({ replayed: true, job: { id: 'HP-2001' } });
+    await expect(repo.jobs.where('serviceRequestId').equals('request-1').count()).resolves.toBe(1);
+    await expect(repo.activityEvents.where('jobId').equals('HP-2001').count()).resolves.toBe(1);
+  });
+
+  it('requires owner approval and prevents a second job for the converted request', async () => {
+    const repo = await repository();
+    await repo.createCustomer(sampleCustomer());
+    await repo.createServiceRequest(sampleServiceRequest({ status: 'reviewed' }));
+    const base = {
+      serviceRequestId: 'request-1', operationId: 'request-to-job-1', actorId: 'owner-1',
+      occurredAt: '2026-09-24T14:00:00.000Z', auditEventId: 'audit-request-to-job-1',
+    };
+
+    await expect(repo.convertServiceRequestToJob({ ...base, jobId: 'HP-2001', actorRole: 'dispatcher' }))
+      .rejects.toThrow(/owner approval/i);
+    await expect(repo.jobs.get('HP-2001')).resolves.toBeUndefined();
+
+    await repo.convertServiceRequestToJob({ ...base, jobId: 'HP-2001', actorRole: 'owner_admin' });
+    await expect(repo.convertServiceRequestToJob({
+      ...base, jobId: 'HP-2002', operationId: 'request-to-job-2',
+      auditEventId: 'audit-request-to-job-2', actorRole: 'owner_admin',
+    })).rejects.toThrow(/already converted/i);
+    await expect(repo.jobs.where('serviceRequestId').equals('request-1').count()).resolves.toBe(1);
+  });
 });

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Job } from '../../packages/fieldstead-domain/src';
+import type { Customer, Job, ServiceRequest } from '../../packages/fieldstead-domain/src';
 import {
   createFieldsteadRepository,
   type FieldsteadRepository,
@@ -26,6 +26,24 @@ function job(overrides: Partial<Job> = {}): Job {
     createdAt: '2026-09-04T10:00:00.000Z',
     updatedAt: '2026-09-04T10:00:00.000Z',
     ...overrides,
+  };
+}
+
+function customer(): Customer {
+  return {
+    id: 'customer-1', displayName: 'Jamie Rivera', primaryEmail: 'jamie@example.com',
+    primaryPhone: '3125550142', serviceAddress: '42 Oak Street',
+    sourceEmail: { accountId: 'mailbox-1', messageId: '<request-1@example.com>', normalizedFrom: 'jamie@example.com' },
+    audit: { createdAt: '2026-09-24T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-24T12:00:00.000Z', updatedBy: 'owner-1' },
+  };
+}
+
+function serviceRequest(): ServiceRequest {
+  return {
+    id: 'request-1', customerId: 'customer-1', summary: 'Gutter cleaning request',
+    details: 'Please clean the gutters before October.', status: 'reviewed',
+    sourceEmail: { accountId: 'mailbox-1', messageId: '<request-1@example.com>', normalizedFrom: 'jamie@example.com' },
+    audit: { createdAt: '2026-09-24T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-24T12:00:00.000Z', updatedBy: 'owner-1' },
   };
 }
 
@@ -153,6 +171,23 @@ describe('LocalJobsStore', () => {
         kind: 'job.create',
       }),
     );
+    store.stop();
+  });
+
+  it('refreshes visible jobs after an owner-approved service-request handoff', async () => {
+    const { repository, store } = setup([]);
+    await store.start();
+    await repository.createCustomer(customer());
+    await repository.createServiceRequest(serviceRequest());
+
+    const result = await store.convertServiceRequestToJob({
+      serviceRequestId: 'request-1', jobId: 'HP-2001', operationId: 'handoff-1',
+      actorId: 'Fieldstead owner', actorRole: 'owner_admin',
+      occurredAt: '2026-09-24T14:00:00.000Z', auditEventId: 'activity-handoff-1',
+    });
+
+    expect(result).toMatchObject({ replayed: false, job: { id: 'HP-2001', serviceRequestId: 'request-1' } });
+    await waitFor(() => expect(store.getSnapshot().jobs).toContainEqual(expect.objectContaining({ id: 'HP-2001' })));
     store.stop();
   });
 

@@ -85,4 +85,22 @@ describe('email intake review panel', () => {
     expect(html).toContain('disabled');
     expect(html).not.toContain('Create job');
   });
+
+  it('offers an explicit owner-confirmed job handoff only after durable conversion', () => {
+    const html = renderToStaticMarkup(<EmailIntakeReviewPanel
+      proposal={proposal}
+      mode="converted"
+      conversionResult={{ customerId: 'customer-1', serviceRequestId: 'request-1', replayed: false }}
+      onDismiss={vi.fn()}
+      onEdit={vi.fn()}
+      onApprove={vi.fn()}
+      onConfirmJobHandoff={vi.fn()}
+    />);
+
+    expect(html).toContain('Create draft job from this service request');
+    expect(html).toContain('I reviewed this service request and approve creating one linked draft job');
+    expect(html).toContain('Confirm job handoff');
+    expect(html).toContain('disabled');
+    expect(html).toContain('No message, schedule, estimate, invoice, or payment action will occur');
+  });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Customer } from '../packages/fieldstead-domain/src';
 import type { EmailIntakeReviewProposal, ProposalEvidence } from '../lib/email-intake-review';
 import { findEmailIntakeDuplicateCandidates, type EmailIntakeApproval, type EmailIntakeDraft } from '../lib/email-intake-conversion';
@@ -10,15 +10,17 @@ const evidenceLabels: Record<ProposalEvidence, string> = { 'from-header': 'From 
 function draftFromProposal(proposal: EmailIntakeReviewProposal): EmailIntakeDraft { return { name: proposal.proposedContact.name?.value || '', email: proposal.proposedContact.email.value, phone: proposal.proposedContact.phone?.value || '', summary: proposal.proposedRequest.summary?.value || '', service: proposal.proposedRequest.service?.value || '', location: proposal.proposedRequest.location?.value || '' }; }
 function Evidence({ source }: { source?: ProposalEvidence }) { return source ? <small className="email-intake-evidence">Evidence: {evidenceLabels[source]}</small> : <small className="email-intake-evidence missing">No evidence found</small>; }
 
-export function EmailIntakeReviewPanel({ proposal, mode, customers = [], selectedApproval = 'customer-and-request', conversionResult, onDismiss, onEdit, onApprove, onSelectApproval = () => undefined, onConfirmConversion = async () => undefined }: {
+export function EmailIntakeReviewPanel({ proposal, mode, customers = [], selectedApproval = 'customer-and-request', conversionResult, onDismiss, onEdit, onApprove, onSelectApproval = () => undefined, onConfirmConversion = async () => undefined, onConfirmJobHandoff = async () => undefined }: {
   proposal: EmailIntakeReviewProposal; mode: EmailIntakeReviewMode; customers?: Customer[]; selectedApproval?: EmailIntakeApproval; conversionResult?: EmailIntakeConversionResult;
   onDismiss: () => void; onEdit: (draft: EmailIntakeDraft) => void; onApprove: (draft: EmailIntakeDraft) => void;
   onSelectApproval?: (approval: EmailIntakeApproval) => void; onConfirmConversion?: (draft: EmailIntakeDraft, approval: EmailIntakeApproval, existingCustomerId?: string) => Promise<void> | void;
+  onConfirmJobHandoff?: (serviceRequestId: string) => Promise<void> | void;
 }) {
   const [draft, setDraft] = useState(() => draftFromProposal(proposal));
   const [confirmed, setConfirmed] = useState(false);
+  const [jobHandoffConfirmed, setJobHandoffConfirmed] = useState(false);
   const [existingCustomerId, setExistingCustomerId] = useState('');
-  useEffect(() => { setDraft(draftFromProposal(proposal)); setConfirmed(false); setExistingCustomerId(''); }, [proposal]);
+
   const duplicates = useMemo(() => findEmailIntakeDuplicateCandidates(draft, customers), [draft, customers]);
   const set = (field: keyof EmailIntakeDraft, value: string) => setDraft((current) => ({ ...current, [field]: value }));
   const fields: Array<[keyof EmailIntakeDraft, string, ProposalEvidence | undefined]> = [['name', 'Contact name', proposal.proposedContact.name?.source], ['email', 'Email', proposal.proposedContact.email.source], ['phone', 'Phone', proposal.proposedContact.phone?.source], ['summary', 'Request summary', proposal.proposedRequest.summary?.source], ['service', 'Service', proposal.proposedRequest.service?.source], ['location', 'Service location', proposal.proposedRequest.location?.source]];
@@ -38,6 +40,12 @@ export function EmailIntakeReviewPanel({ proposal, mode, customers = [], selecte
       {selectedApproval === 'request-only' && <label>Attach to existing customer<select value={existingCustomerId} onChange={(event) => { setExistingCustomerId(event.target.value); setConfirmed(false); }}><option value="">Choose an existing customer</option>{customers.map((customer) => <option value={customer.id} key={customer.id}>{customer.displayName}</option>)}</select></label>}
       <label className="confirm-import"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}/><span>I reviewed the proposed records and duplicate candidates. Create exactly the selected durable records without merging or overwriting.</span></label>
       <button className="primary full" type="button" disabled={!confirmed || !requestOnlyReady} onClick={() => void onConfirmConversion(draft, selectedApproval, existingCustomerId || undefined)}>Confirm durable conversion</button>
+    </div>}
+    {mode === 'converted' && conversionResult?.serviceRequestId && <div className="email-intake-conversion">
+      <h4>Create draft job from this service request</h4>
+      <p>No message, schedule, estimate, invoice, or payment action will occur. The job starts as an unscheduled draft with zero amounts.</p>
+      <label className="confirm-import"><input type="checkbox" checked={jobHandoffConfirmed} onChange={(event) => setJobHandoffConfirmed(event.target.checked)}/><span>I reviewed this service request and approve creating one linked draft job.</span></label>
+      <button className="primary full" type="button" disabled={!jobHandoffConfirmed} onClick={() => void onConfirmJobHandoff(conversionResult.serviceRequestId!)}>Confirm job handoff</button>
     </div>}
     <div className="email-intake-actions"><button className="secondary" type="button" onClick={onDismiss}>Dismiss</button>{mode !== 'converted' && (mode === 'edit' ? <button className="secondary" type="button" onClick={() => onEdit(draft)}>Save proposal edits</button> : <button className="secondary" type="button" onClick={() => onEdit(draft)}>Edit proposal</button>)}{mode === 'review' && <button className="primary" type="button" onClick={() => onApprove(draft)}>Continue to owner confirmation</button>}</div>
   </section>;

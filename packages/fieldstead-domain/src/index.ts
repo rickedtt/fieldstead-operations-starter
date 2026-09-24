@@ -23,6 +23,7 @@ export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export type Job = {
   id: string;
   customerId: string;
+  serviceRequestId?: string;
   service: string;
   description: string;
   quoteStatus: QuoteStatus;
@@ -91,6 +92,7 @@ export type ServiceRequest = {
   summary: string;
   details: string;
   status: ServiceRequestStatus;
+  convertedJobId?: string;
   sourceEmail: SourceEmailIdentity;
   audit: AuditMetadata;
 };
@@ -236,6 +238,7 @@ export function parseServiceRequest(value: unknown): ServiceRequest {
     summary: stringField(request, 'summary', 'ServiceRequest'),
     details: stringField(request, 'details', 'ServiceRequest'),
     status: enumField(request, 'status', 'ServiceRequest', SERVICE_REQUEST_STATUSES),
+    convertedJobId: optionalStringField(request, 'convertedJobId', 'ServiceRequest'),
     sourceEmail: parseSourceEmailIdentity(request.sourceEmail),
     audit: parseAuditMetadata(request.audit),
   };
@@ -246,6 +249,7 @@ export function parseJob(value: unknown): Job {
   return {
     id: stringField(job, 'id', 'Job'),
     customerId: stringField(job, 'customerId', 'Job'),
+    serviceRequestId: optionalStringField(job, 'serviceRequestId', 'Job'),
     service: stringField(job, 'service', 'Job'),
     description: stringField(job, 'description', 'Job'),
     quoteStatus: enumField(job, 'quoteStatus', 'Job', QUOTE_STATUSES),

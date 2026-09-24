@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import type { ActivityEvent, Customer as DurableCustomer, Job } from '../../packages/fieldstead-domain/src';
+import type { ActivityEvent, Customer as DurableCustomer, Job, ServiceRequest } from '../../packages/fieldstead-domain/src';
 import {
   createFieldsteadRepository,
   type FieldsteadRepository,
@@ -185,6 +185,22 @@ export class LocalJobsStore {
     return this.repository!.listCustomers();
   }
 
+  async getDurableServiceRequest(serviceRequestId: string): Promise<ServiceRequest | undefined> {
+    await this.start();
+    return this.repository!.getServiceRequest(serviceRequestId);
+  }
+
+  async convertServiceRequestToJob(input: Parameters<FieldsteadRepository['convertServiceRequestToJob']>[0]) {
+    await this.start();
+    const converted = await this.repository!.convertServiceRequestToJob(input);
+    this.update({
+      jobs: [converted.job, ...this.snapshot.jobs.filter((job) => job.id !== converted.job.id)],
+      loading: false,
+      error: null,
+    });
+    return converted;
+  }
+
   async convertEmailIntake(input: Parameters<FieldsteadRepository['convertEmailIntake']>[0]) {
     await this.start();
     return this.repository!.convertEmailIntake(input);
@@ -248,7 +264,9 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     mutateJob: store.mutateJob.bind(store),
     createJob: store.createJob.bind(store),
     listDurableCustomers: store.listDurableCustomers.bind(store),
+    getDurableServiceRequest: store.getDurableServiceRequest.bind(store),
     convertEmailIntake: store.convertEmailIntake.bind(store),
+    convertServiceRequestToJob: store.convertServiceRequestToJob.bind(store),
     migrateLocalStorage,
     replaceDemoJobs: store.replaceDemoJobs.bind(store),
     restoreSeedJobs: store.restoreSeedJobs.bind(store),

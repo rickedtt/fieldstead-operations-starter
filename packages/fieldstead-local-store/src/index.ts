@@ -49,6 +49,16 @@ export type ServiceRequestUpdate = {
   updatedBy: string;
 };
 
+export type ServiceRequestJobConversion = {
+  serviceRequestId: string;
+  jobId: string;
+  operationId: string;
+  actorId: string;
+  actorRole: 'owner_admin' | 'dispatcher' | 'field_crew';
+  occurredAt: string;
+  auditEventId: string;
+};
+
 export type EmailIntakeConversion = {
   operationId: string;
   approval: 'customer-only' | 'request-only' | 'customer-and-request';
@@ -103,6 +113,15 @@ export class FieldsteadRepository extends Dexie {
       metadata: 'key, updatedAt',
       customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
       serviceRequests: 'id, customerId, status, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+    });
+    this.version(4).stores({
+      jobs: 'id, customerId, serviceRequestId, status, updatedAt',
+      assignments: 'id, jobId, assigneeId, assignedAt',
+      activityEvents: 'id, jobId, customerId, at',
+      outboxOperations: 'id, status, createdAt, [entityType+entityId]',
+      metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
     });
   }
 
@@ -214,6 +233,54 @@ export class FieldsteadRepository extends Dexie {
       });
       await this.serviceRequests.put(updated);
       return updated;
+    });
+  }
+
+  async convertServiceRequestToJob(input: ServiceRequestJobConversion): Promise<{ replayed: boolean; job: Job; serviceRequest: ServiceRequest }> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to convert a service request to a job');
+    const key = `service-request-job-conversion:${input.operationId}`;
+    const fingerprint = JSON.stringify(input);
+    return this.transaction('rw', this.jobs, this.serviceRequests, this.activityEvents, this.outboxOperations, this.metadata, async () => {
+      const prior = await this.metadata.get(key);
+      if (prior) {
+        if (prior.value !== fingerprint) throw new Error('Service request conversion idempotency key reused with different content');
+        const priorJob = await this.jobs.get(input.jobId);
+        const priorRequest = await this.serviceRequests.get(input.serviceRequestId);
+        if (!priorJob || !priorRequest) throw new Error('Service request conversion replay is incomplete');
+        return { replayed: true, job: priorJob, serviceRequest: priorRequest };
+      }
+      const request = await this.serviceRequests.get(input.serviceRequestId);
+      if (!request) throw new Error(`Service request ${input.serviceRequestId} was not found`);
+      if (request.convertedJobId || request.status === 'converted') throw new Error(`Service request ${input.serviceRequestId} was already converted`);
+      const linkedJob = await this.jobs.where('serviceRequestId').equals(request.id).first();
+      if (linkedJob) throw new Error(`Service request ${input.serviceRequestId} was already converted`);
+      const job = parseJob({
+        id: input.jobId, customerId: request.customerId, serviceRequestId: request.id,
+        service: request.summary, description: request.details, quoteStatus: 'Draft', quoteAmount: 0,
+        durationHours: 0, crew: 'Unassigned', status: 'Quoted', invoiceStatus: 'Not created',
+        invoiceAmount: 0, createdAt: input.occurredAt, updatedAt: input.occurredAt,
+      });
+      const updatedRequest = parseServiceRequest({
+        ...request, status: 'converted', convertedJobId: job.id,
+        audit: { ...request.audit, updatedAt: input.occurredAt, updatedBy: input.actorId },
+      });
+      const event = parseActivityEvent({
+        id: input.auditEventId, at: input.occurredAt, jobId: job.id,
+        customerId: request.customerId, actor: input.actorId,
+        action: 'Service request converted to job',
+        detail: `Created ${job.id} from service request ${request.id}. No communication, schedule, estimate, or invoice was created.`,
+      });
+      const operation = parseOutboxOperation({
+        id: input.operationId, entityType: 'job', entityId: job.id,
+        kind: 'job.create-from-service-request', payload: { ...job, serviceRequestId: request.id },
+        createdAt: input.occurredAt, status: 'pending',
+      });
+      await this.jobs.add(job);
+      await this.serviceRequests.put(updatedRequest);
+      await this.activityEvents.add(event);
+      await this.outboxOperations.add(operation);
+      await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt });
+      return { replayed: false, job, serviceRequest: updatedRequest };
     });
   }
 
