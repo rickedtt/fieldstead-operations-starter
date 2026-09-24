@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   ROLE_CAPABILITIES,
   canTransitionJobStatus,
+  parseCustomer,
   parseJob,
   parseOutboxOperation,
+  parseServiceRequest,
 } from './index';
 
 describe('Fieldstead job status rules', () => {
@@ -48,5 +50,33 @@ describe('role capabilities', () => {
         createdAt: '2026-09-04T12:00:00.000Z',
       }),
     ).toThrow(/OutboxOperation\.id/);
+  });
+});
+
+describe('customer and service request records', () => {
+  const audit = {
+    createdAt: '2026-09-24T12:00:00.000Z', createdBy: 'owner-1',
+    updatedAt: '2026-09-24T12:00:00.000Z', updatedBy: 'owner-1',
+  };
+  const sourceEmail = {
+    accountId: 'mailbox-1', messageId: '<request-1@example.com>', normalizedFrom: 'jamie@example.com',
+  };
+
+  it('parses source email identity and audit metadata', () => {
+    expect(parseCustomer({
+      id: 'customer-1', displayName: 'Jamie Rivera', primaryEmail: 'jamie@example.com',
+      sourceEmail, audit,
+    })).toMatchObject({ id: 'customer-1', primaryEmail: 'jamie@example.com' });
+    expect(parseServiceRequest({
+      id: 'request-1', customerId: 'customer-1', summary: 'Gutter cleaning request',
+      details: 'Please clean the gutters before October.', status: 'new', sourceEmail, audit,
+    })).toMatchObject({ id: 'request-1', customerId: 'customer-1', status: 'new' });
+  });
+
+  it('rejects incomplete source email identity', () => {
+    expect(() => parseCustomer({
+      id: 'customer-1', displayName: 'Jamie Rivera',
+      sourceEmail: { accountId: 'mailbox-1' }, audit,
+    })).toThrow(/SourceEmailIdentity\.messageId/);
   });
 });

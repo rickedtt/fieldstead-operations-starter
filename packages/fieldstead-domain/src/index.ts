@@ -59,6 +59,40 @@ export type ActivityEvent = {
   detail: string;
 };
 
+export type AuditMetadata = {
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+};
+
+export type SourceEmailIdentity = {
+  accountId: string;
+  messageId: string;
+  normalizedFrom: string;
+};
+
+export type Customer = {
+  id: string;
+  displayName: string;
+  primaryEmail?: string;
+  sourceEmail: SourceEmailIdentity;
+  audit: AuditMetadata;
+};
+
+export const SERVICE_REQUEST_STATUSES = ['new', 'reviewed', 'converted', 'closed'] as const;
+export type ServiceRequestStatus = (typeof SERVICE_REQUEST_STATUSES)[number];
+
+export type ServiceRequest = {
+  id: string;
+  customerId: string;
+  summary: string;
+  details: string;
+  status: ServiceRequestStatus;
+  sourceEmail: SourceEmailIdentity;
+  audit: AuditMetadata;
+};
+
 export type OutboxOperation = {
   id: string;
   entityType: 'job' | 'jobAssignment' | 'activityEvent';
@@ -158,6 +192,49 @@ function enumField<const Values extends readonly string[]>(
     throw new TypeError(`${owner}.${field} is not supported`);
   }
   return candidate as Values[number];
+}
+
+function parseAuditMetadata(value: unknown): AuditMetadata {
+  const audit = record(value, 'AuditMetadata');
+  return {
+    createdAt: stringField(audit, 'createdAt', 'AuditMetadata'),
+    createdBy: stringField(audit, 'createdBy', 'AuditMetadata'),
+    updatedAt: stringField(audit, 'updatedAt', 'AuditMetadata'),
+    updatedBy: stringField(audit, 'updatedBy', 'AuditMetadata'),
+  };
+}
+
+function parseSourceEmailIdentity(value: unknown): SourceEmailIdentity {
+  const source = record(value, 'SourceEmailIdentity');
+  return {
+    accountId: stringField(source, 'accountId', 'SourceEmailIdentity'),
+    messageId: stringField(source, 'messageId', 'SourceEmailIdentity'),
+    normalizedFrom: stringField(source, 'normalizedFrom', 'SourceEmailIdentity'),
+  };
+}
+
+export function parseCustomer(value: unknown): Customer {
+  const customer = record(value, 'Customer');
+  return {
+    id: stringField(customer, 'id', 'Customer'),
+    displayName: stringField(customer, 'displayName', 'Customer'),
+    primaryEmail: optionalStringField(customer, 'primaryEmail', 'Customer'),
+    sourceEmail: parseSourceEmailIdentity(customer.sourceEmail),
+    audit: parseAuditMetadata(customer.audit),
+  };
+}
+
+export function parseServiceRequest(value: unknown): ServiceRequest {
+  const request = record(value, 'ServiceRequest');
+  return {
+    id: stringField(request, 'id', 'ServiceRequest'),
+    customerId: stringField(request, 'customerId', 'ServiceRequest'),
+    summary: stringField(request, 'summary', 'ServiceRequest'),
+    details: stringField(request, 'details', 'ServiceRequest'),
+    status: enumField(request, 'status', 'ServiceRequest', SERVICE_REQUEST_STATUSES),
+    sourceEmail: parseSourceEmailIdentity(request.sourceEmail),
+    audit: parseAuditMetadata(request.audit),
+  };
 }
 
 export function parseJob(value: unknown): Job {
