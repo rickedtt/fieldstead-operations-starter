@@ -269,3 +269,9 @@ body{min-width:0}
 /* Remove the light sidebar footer spill below the green navigation surface. */
 .sidebar{background:var(--green-dark)!important;box-shadow:inset 0 0 0 100vmax var(--green-dark);clip-path:inset(0 -100vmax)}
 .sidebar-foot{background:var(--green-dark)}
+
+/* Sidebar must own the full left edge with no body/page background showing. */
+html,body,#root{margin:0!important;padding:0!important;background:var(--green-dark)!important}
+.app-shell{margin:0!important;min-height:100vh;background:var(--green-dark)}
+.workspace{background:var(--paper)}
+.sidebar{margin:0!important;border:0!important;outline:0!important;background:var(--green-dark)!important}
