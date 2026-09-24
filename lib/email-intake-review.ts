@@ -34,7 +34,7 @@ export type EmailIntakeReviewProposal = {
 };
 
 const PHONE_PATTERN = /(?:\+?1[ .-]?)?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}/;
-const LOCATION_PATTERN = /(\d+[A-Za-z]?\s+[A-Za-z0-9][A-Za-z0-9 .'-]*?\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way))/i;
+const LOCATION_PATTERN = /\b(\d+[A-Za-z]?\s+[A-Za-z0-9][A-Za-z0-9 .'-]*?\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way))(?=\b|$)/i;
 
 function proposed(value: string | undefined, source: ProposalEvidence): ProposedValue | undefined {
   const normalized = value?.trim();
