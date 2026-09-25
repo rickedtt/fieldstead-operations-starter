@@ -154,6 +154,26 @@ function sampleServiceRequest(overrides: Partial<ServiceRequest> = {}): ServiceR
 }
 
 describe('durable customer and service request records', () => {
+  it('creates owner-explicit metadata-only communication links with audit and idempotent replay', async () => {
+    const repo = await repository();
+    const input = { operationId: 'link-op-1', actorId: 'Fieldstead owner', actorRole: 'owner_admin' as const, occurredAt: '2026-09-25T13:00:00.000Z', auditEventId: 'audit-link-1', link: { id: 'link-1', operationId: 'link-op-1', entityType: 'job' as const, entityId: 'HP-2000', source: { kind: 'email' as const, direction: 'inbound' as const, accountId: 'mailbox-1', messageId: '42' }, subject: 'Gutter access', correspondent: 'jamie@example.com', occurredAt: '2026-09-25T12:00:00.000Z', linkedAt: '2026-09-25T13:00:00.000Z', linkedBy: 'Fieldstead owner' } };
+    expect((await repo.linkCommunication(input)).replayed).toBe(false);
+    expect((await repo.linkCommunication(input)).replayed).toBe(true);
+    await expect(repo.listCommunicationTimeline('job', 'HP-2000')).resolves.toEqual([input.link]);
+    await expect(repo.activityEvents.get('audit-link-1')).resolves.toMatchObject({ action: 'Email linked', jobId: 'HP-2000' });
+    await expect(repo.outboxOperations.count()).resolves.toBe(0);
+  });
+
+  it('orders links deterministically and rejects non-owner, duplicate-source, and conflicting replay writes', async () => {
+    const repo = await repository();
+    const base = { actorId: 'owner', actorRole: 'owner_admin' as const, occurredAt: '2026-09-25T13:00:00.000Z', link: { id: 'link-1', operationId: 'op-1', entityType: 'job' as const, entityId: 'HP-2000', source: { kind: 'email' as const, direction: 'inbound' as const, accountId: 'mailbox-1', messageId: '42' }, subject: 'First', correspondent: 'a@example.com', occurredAt: '2026-09-25T12:00:00.000Z', linkedAt: '2026-09-25T13:00:00.000Z', linkedBy: 'owner' } };
+    await expect(repo.linkCommunication({ ...base, operationId: 'nope', auditEventId: 'nope', actorRole: 'dispatcher' })).rejects.toThrow(/owner approval/i);
+    await repo.linkCommunication({ ...base, operationId: 'op-1', auditEventId: 'audit-1' });
+    await repo.linkCommunication({ ...base, operationId: 'op-2', auditEventId: 'audit-2', link: { ...base.link, id: 'link-2', operationId: 'op-2', source: { ...base.link.source, messageId: '43' }, subject: 'Second' } });
+    await expect(repo.listCommunicationTimeline('job', 'HP-2000')).resolves.toMatchObject([{ id: 'link-1' }, { id: 'link-2' }]);
+    await expect(repo.linkCommunication({ ...base, operationId: 'op-3', auditEventId: 'audit-3', link: { ...base.link, id: 'link-3', operationId: 'op-3' } })).rejects.toThrow(/already linked/i);
+    await expect(repo.linkCommunication({ ...base, operationId: 'op-1', auditEventId: 'audit-1', link: { ...base.link, subject: 'Changed' } })).rejects.toThrow(/idempotency key reused/i);
+  });
   it('creates an owner-approved invoice from the estimate snapshot and replays idempotently', async () => {
     const repo = await repository();
     const audit = { createdAt: '2026-09-25T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-25T12:00:00.000Z', updatedBy: 'owner-1' };

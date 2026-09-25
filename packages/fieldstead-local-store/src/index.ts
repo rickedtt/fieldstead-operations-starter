@@ -1,6 +1,7 @@
 import Dexie, { liveQuery, type EntityTable, type Observable } from 'dexie';
 import {
   canTransitionJobStatus,
+  parseCommunicationLink,
   parseActivityEvent,
   parseCustomer,
   parseEstimate,
@@ -20,6 +21,8 @@ import {
   schedulesOverlap,
   type ActivityEvent,
   type CalendarEntry,
+  type CommunicationEntityType,
+  type CommunicationLink,
   type Customer,
   type DispatchActorRole,
   type Estimate,
@@ -123,6 +126,7 @@ export type InvoiceCreation = { jobId: string; invoiceId: string; operationId: s
 export type PaymentEntryPost = { invoiceId: string; entryId: string; kind: PaymentEntry['kind']; amountCents: number; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string; correctsEntryId?: string; note?: string };
 export type RecurringAgreementSave = { agreement: RecurringServiceAgreement; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string };
 export type RecurringOccurrenceGeneration = { agreementId: string; occurrenceIds: string[]; preview: RecurringServiceOccurrence[]; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string };
+export type CommunicationLinkCreation = { link: CommunicationLink; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string };
 
 export type ScheduleJobInput = {
   jobId: string; scheduledFor: string; durationHours: number; assigneeId?: string; assigneeName?: string;
@@ -163,6 +167,7 @@ export class FieldsteadRepository extends Dexie implements SyncOutbox {
   recurringServiceAgreements!: EntityTable<RecurringServiceAgreement, 'id'>;
   recurringServiceOccurrences!: EntityTable<RecurringServiceOccurrence, 'id'>;
   pricebookItemVersions!: EntityTable<PricebookItem, 'id'>;
+  communicationLinks!: EntityTable<CommunicationLink, 'id'>;
 
   constructor(databaseName = 'fieldstead') {
     super(databaseName);
@@ -273,6 +278,33 @@ export class FieldsteadRepository extends Dexie implements SyncOutbox {
       pricebookItemVersions: '[id+version], id, version, active, audit.updatedAt', recurringServiceAgreements: 'id, customerId, status, audit.updatedAt', recurringServiceOccurrences: 'id, agreementId, status, &provenanceKey, generatedEntityId',
     }).upgrade(async (transaction) => {
       await transaction.table<OutboxOperation>('outboxOperations').toCollection().modify((operation) => { operation.status ||= 'pending'; operation.attemptCount ??= 0; });
+    });
+    this.version(12).stores({
+      jobs: 'id, customerId, serviceRequestId, status, scheduledFor, updatedAt', assignments: 'id, jobId, assigneeId, assignedAt, unassignedAt', activityEvents: 'id, jobId, customerId, at', outboxOperations: 'id, status, createdAt, [status+createdAt], [entityType+entityId]', metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt', estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
+      fieldEvents: 'id, &operationId, jobId, actorId, occurredAt, syncState', invoices: 'id, &jobId, customerId, status, issuedAt, dueAt', invoiceLineItems: 'id, invoiceId, [invoiceId+position]', paymentEntries: 'id, invoiceId, kind, occurredAt, correctsEntryId', pricebookItemVersions: '[id+version], id, version, active, audit.updatedAt', recurringServiceAgreements: 'id, customerId, status, audit.updatedAt', recurringServiceOccurrences: 'id, agreementId, status, &provenanceKey, generatedEntityId',
+      communicationLinks: 'id, &operationId, [entityType+entityId], &[source.accountId+source.messageId+entityType+entityId], occurredAt, linkedAt',
+    });
+  }
+
+  async listCommunicationTimeline(entityType: CommunicationEntityType, entityId: string): Promise<CommunicationLink[]> {
+    return (await this.communicationLinks.where('[entityType+entityId]').equals([entityType, entityId]).toArray()).sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.linkedAt.localeCompare(right.linkedAt) || left.id.localeCompare(right.id));
+  }
+
+  async linkCommunication(input: CommunicationLinkCreation): Promise<{ replayed: boolean; link: CommunicationLink }> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to link communication');
+    const link = parseCommunicationLink(input.link);
+    if (link.operationId !== input.operationId || link.linkedAt !== input.occurredAt || link.linkedBy !== input.actorId) throw new Error('Communication link audit identity must match the owner command');
+    const fingerprint = JSON.stringify({ actorId: input.actorId, link }); const key = `communication-link:${input.operationId}`;
+    return this.transaction('rw', [this.communicationLinks, this.customers, this.serviceRequests, this.jobs, this.estimates, this.invoices, this.activityEvents, this.metadata], async () => {
+      const prior = await this.metadata.get(key);
+      if (prior) { if (prior.value !== fingerprint) throw new Error('Communication link idempotency key reused with different content'); const saved = await this.communicationLinks.where('operationId').equals(input.operationId).first(); if (!saved) throw new Error('Communication link replay is incomplete'); return { replayed: true, link: saved }; }
+      const entityExists = link.entityType === 'customer' ? await this.customers.get(link.entityId) : link.entityType === 'serviceRequest' ? await this.serviceRequests.get(link.entityId) : link.entityType === 'job' ? await this.jobs.get(link.entityId) : link.entityType === 'estimate' ? await this.estimates.get(link.entityId) : await this.invoices.get(link.entityId);
+      if (!entityExists) throw new Error(`${link.entityType} ${link.entityId} was not found`);
+      if (await this.communicationLinks.where('[source.accountId+source.messageId+entityType+entityId]').equals([link.source.accountId, link.source.messageId, link.entityType, link.entityId]).first()) throw new Error('Email source is already linked to this record');
+      const jobId = link.entityType === 'job' ? link.entityId : link.entityType === 'estimate' ? (entityExists as Estimate).jobId : link.entityType === 'invoice' ? (entityExists as Invoice).jobId : undefined;
+      const customerId = link.entityType === 'customer' ? link.entityId : link.entityType === 'serviceRequest' ? (entityExists as ServiceRequest).customerId : link.entityType === 'job' ? (entityExists as Job).customerId : link.entityType === 'invoice' ? (entityExists as Invoice).customerId : jobId ? (await this.jobs.get(jobId))?.customerId : undefined;
+      await this.communicationLinks.add(link); await this.activityEvents.add(parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, jobId, customerId, actor: input.actorId, action: 'Email linked', detail: `${link.source.direction} email “${link.subject}” linked to ${link.entityType} ${link.entityId}. Metadata only; no message was sent or copied.` })); await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt }); return { replayed: false, link };
     });
   }
 

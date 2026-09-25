@@ -274,6 +274,17 @@ export class LocalJobsStore {
     return this.repository!.convertEmailIntake(input);
   }
 
+  async linkCommunication(link: Omit<Parameters<FieldsteadRepository['linkCommunication']>[0]['link'], 'id' | 'operationId' | 'linkedAt' | 'linkedBy'>) {
+    await this.start();
+    const operationId = this.createOperationId(); const occurredAt = this.now(); const actorId = 'Fieldstead owner';
+    return this.repository!.linkCommunication({ operationId, actorId, actorRole: 'owner_admin', occurredAt, auditEventId: `activity-${operationId}`, link: { ...link, id: `communication-${operationId}`, operationId, linkedAt: occurredAt, linkedBy: actorId } });
+  }
+
+  async listCommunicationTimeline(entityType: Parameters<FieldsteadRepository['listCommunicationTimeline']>[0], entityId: string) {
+    await this.start();
+    return this.repository!.listCommunicationTimeline(entityType, entityId);
+  }
+
   async recordAttachmentAdded(attachment: OperationalAttachment) {
     await this.start();
     return this.repository!.recordAttachmentAdded({
@@ -442,6 +453,8 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     listDurableCustomers: store.listDurableCustomers.bind(store),
     getDurableServiceRequest: store.getDurableServiceRequest.bind(store),
     convertEmailIntake: store.convertEmailIntake.bind(store),
+    linkCommunication: store.linkCommunication.bind(store),
+    listCommunicationTimeline: store.listCommunicationTimeline.bind(store),
     convertServiceRequestToJob: store.convertServiceRequestToJob.bind(store),
     recordAttachmentAdded: store.recordAttachmentAdded.bind(store),
     recordAttachmentDeleted: store.recordAttachmentDeleted.bind(store),

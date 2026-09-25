@@ -102,6 +102,13 @@ export type SourceEmailIdentity = {
   normalizedFrom: string;
 };
 
+export type CommunicationEntityType = 'customer' | 'serviceRequest' | 'job' | 'estimate' | 'invoice';
+export type CommunicationLink = {
+  id: string; operationId: string; entityType: CommunicationEntityType; entityId: string;
+  source: { kind: 'email'; direction: 'inbound' | 'outbound'; accountId: string; messageId: string };
+  subject: string; correspondent: string; occurredAt: string; linkedAt: string; linkedBy: string;
+};
+
 export type Customer = {
   id: string;
   displayName: string;
@@ -308,6 +315,18 @@ export function parseServiceRequest(value: unknown): ServiceRequest {
     convertedJobId: optionalStringField(request, 'convertedJobId', 'ServiceRequest'),
     sourceEmail: parseSourceEmailIdentity(request.sourceEmail),
     audit: parseAuditMetadata(request.audit),
+  };
+}
+
+export function parseCommunicationLink(value: unknown): CommunicationLink {
+  const link = record(value, 'CommunicationLink');
+  const source = record(link.source, 'CommunicationLink.source');
+  return {
+    id: stringField(link, 'id', 'CommunicationLink'), operationId: stringField(link, 'operationId', 'CommunicationLink'),
+    entityType: enumField(link, 'entityType', 'CommunicationLink', ['customer', 'serviceRequest', 'job', 'estimate', 'invoice'] as const),
+    entityId: stringField(link, 'entityId', 'CommunicationLink'),
+    source: { kind: enumField(source, 'kind', 'CommunicationLink.source', ['email'] as const), direction: enumField(source, 'direction', 'CommunicationLink.source', ['inbound', 'outbound'] as const), accountId: stringField(source, 'accountId', 'CommunicationLink.source'), messageId: stringField(source, 'messageId', 'CommunicationLink.source') },
+    subject: stringField(link, 'subject', 'CommunicationLink'), correspondent: stringField(link, 'correspondent', 'CommunicationLink'), occurredAt: stringField(link, 'occurredAt', 'CommunicationLink'), linkedAt: stringField(link, 'linkedAt', 'CommunicationLink'), linkedBy: stringField(link, 'linkedBy', 'CommunicationLink'),
   };
 }
 

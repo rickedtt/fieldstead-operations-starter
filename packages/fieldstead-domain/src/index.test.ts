@@ -8,6 +8,7 @@ import {
   parseInvoice,
   parseInvoiceLineItem,
   parseJob,
+  parseCommunicationLink,
   parseOutboxOperation,
   parsePaymentEntry,
   parsePricebookItem,
@@ -108,6 +109,25 @@ describe('customer and service request records', () => {
       status: 'Quoted', invoiceStatus: 'Not created', invoiceAmount: 0,
       createdAt: audit.createdAt, updatedAt: audit.updatedAt,
     })).toMatchObject({ serviceRequestId: 'request-1' });
+  });
+});
+
+describe('communication timeline links', () => {
+  it('parses metadata-only email links without message bodies or credentials', () => {
+    const link = parseCommunicationLink({
+      id: 'communication-link-1', operationId: 'link-op-1', entityType: 'job', entityId: 'HP-2000',
+      source: { kind: 'email', direction: 'inbound', accountId: 'mailbox-1', messageId: '42' },
+      subject: 'Gutter access', correspondent: 'jamie@example.com', occurredAt: '2026-09-25T12:00:00.000Z',
+      linkedAt: '2026-09-25T13:00:00.000Z', linkedBy: 'Fieldstead owner',
+    });
+    expect(link).toMatchObject({ entityType: 'job', source: { messageId: '42' }, subject: 'Gutter access' });
+    expect(link).not.toHaveProperty('body');
+    expect(link).not.toHaveProperty('password');
+  });
+
+  it('rejects unsupported entities and incomplete source identity', () => {
+    expect(() => parseCommunicationLink({ id: 'bad', operationId: 'op', entityType: 'payment', entityId: 'p', source: { kind: 'email', direction: 'inbound', accountId: 'a', messageId: 'm' }, subject: 'x', correspondent: 'x@example.com', occurredAt: '2026-09-25T12:00:00.000Z', linkedAt: '2026-09-25T13:00:00.000Z', linkedBy: 'owner' })).toThrow(/entityType/);
+    expect(() => parseCommunicationLink({ id: 'bad', operationId: 'op', entityType: 'job', entityId: 'j', source: { kind: 'email', direction: 'inbound', accountId: 'a' }, subject: 'x', correspondent: 'x@example.com', occurredAt: '2026-09-25T12:00:00.000Z', linkedAt: '2026-09-25T13:00:00.000Z', linkedBy: 'owner' })).toThrow(/messageId/);
   });
 });
 
