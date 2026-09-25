@@ -53,6 +53,11 @@ export class FakeD1Database {
   readonly portalInvitations: Row[] = [];
   readonly portalSessions: Row[] = [];
   readonly portalEstimates: Row[] = [];
+  readonly communicationSettings: Row[] = [];
+  readonly communicationRules: Row[] = [];
+  readonly communicationPreferences: Row[] = [];
+  readonly communicationAudits: Row[] = [];
+  communicationGlobalEnabled = true;
   readonly mutations: StoredMutation[] = [];
   failNextBatch = false;
 
@@ -74,6 +79,7 @@ export class FakeD1Database {
       portalInvitations: structuredClone(this.portalInvitations),
       portalSessions: structuredClone(this.portalSessions),
       portalEstimates: structuredClone(this.portalEstimates),
+      communicationAudits: structuredClone(this.communicationAudits),
       mutations: structuredClone(this.mutations),
     };
     try {
@@ -91,6 +97,7 @@ export class FakeD1Database {
       this.portalInvitations.splice(0, this.portalInvitations.length, ...snapshots.portalInvitations);
       this.portalSessions.splice(0, this.portalSessions.length, ...snapshots.portalSessions);
       this.portalEstimates.splice(0, this.portalEstimates.length, ...snapshots.portalEstimates);
+      this.communicationAudits.splice(0, this.communicationAudits.length, ...snapshots.communicationAudits);
       this.mutations.splice(0, this.mutations.length, ...snapshots.mutations);
       throw error;
     }
@@ -101,6 +108,27 @@ export class FakeD1Database {
   }
 
   first(query: string, values: unknown[]): Row | null {
+    if (query.includes('COUNT(*) AS tenant_count')) {
+      const [recipient, ruleId, organizationId, dayStart] = values;
+      const rows = this.communicationAudits.filter((row) => row.organization_id === organizationId && row.outcome === 'allowed' && String(row.evaluated_at) >= String(dayStart));
+      return { tenant_count: rows.length, recipient_count: rows.filter((row) => row.recipient === recipient).length, rule_count: rows.filter((row) => row.rule_id === ruleId).length };
+    }
+    if (query.includes('FROM communication_dry_run_audits')) {
+      const [organizationId, idempotencyKey] = values;
+      return this.communicationAudits.find((row) => row.organization_id === organizationId && row.idempotency_key === idempotencyKey) ?? null;
+    }
+    if (query.includes('FROM communication_automation_settings')) {
+      const [organizationId] = values;
+      return this.communicationSettings.find((row) => row.organization_id === organizationId) ?? null;
+    }
+    if (query.includes('FROM communication_automation_rules')) {
+      const [organizationId, id] = values;
+      return this.communicationRules.find((row) => row.organization_id === organizationId && row.id === id) ?? null;
+    }
+    if (query.includes('FROM communication_recipient_preferences')) {
+      const [organizationId, recipient, channel] = values;
+      return this.communicationPreferences.find((row) => row.organization_id === organizationId && row.recipient === recipient && row.channel === channel) ?? null;
+    }
     if (query.includes('COUNT(*) AS count FROM portal_invitations')) {
       const [organizationId, createdByUserId, windowStart] = values;
       return { count: this.portalInvitations.filter((row) => row.organization_id === organizationId && row.created_by_user_id === createdByUserId && String(row.created_at) > String(windowStart)).length };
@@ -184,7 +212,12 @@ export class FakeD1Database {
 
   run(query: string, values: unknown[]): D1Result<unknown> {
     let changes = 0;
-    if (query.includes('INSERT INTO portal_invitations')) {
+    if (query.includes('INSERT INTO communication_dry_run_audits')) {
+      const [id, organizationId, ruleId, actorUserId, idempotencyKey, requestFingerprint, channel, recipient, contentVersion, contentHash, outcome, reason, resultJson, evaluatedAt, createdAt] = values;
+      if (this.communicationAudits.some((row) => row.organization_id === organizationId && row.idempotency_key === idempotencyKey)) throw new Error('UNIQUE constraint failed: communication_dry_run_audits.organization_id, communication_dry_run_audits.idempotency_key');
+      this.communicationAudits.push({ id, organization_id: organizationId, rule_id: ruleId, actor_user_id: actorUserId, idempotency_key: idempotencyKey, request_fingerprint: requestFingerprint, channel, recipient, content_version: contentVersion, content_hash: contentHash, outcome, reason, result_json: resultJson, evaluated_at: evaluatedAt, created_at: createdAt });
+      changes = 1;
+    } else if (query.includes('INSERT INTO portal_invitations')) {
       const [id, organizationId, customerId, secretHash, expiresAt, createdByUserId, createdAt] = values;
       this.portalInvitations.push({ id, organization_id: organizationId, customer_id: customerId, secret_hash: secretHash, expires_at: expiresAt, accepted_at: null, revoked_at: null, created_by_user_id: createdByUserId, created_at: createdAt });
       changes = 1;
