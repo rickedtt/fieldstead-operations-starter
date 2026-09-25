@@ -335,6 +335,16 @@ export class LocalJobsStore {
     return this.repository!.saveEstimate(input);
   }
 
+  async buildOperationsReport(input: Parameters<FieldsteadRepository['buildOperationsReport']>[0]) {
+    await this.start();
+    return this.repository!.buildOperationsReport(input);
+  }
+
+  exportOperationsReportCsv(report: Parameters<FieldsteadRepository['exportOperationsReportCsv']>[0]) {
+    if (!this.repository) throw new Error('Local repository is not ready');
+    return this.repository.exportOperationsReportCsv(report);
+  }
+
   async listAssignedJobs(assigneeId: string) {
     await this.start();
     return this.repository!.listAssignedJobs(assigneeId);
@@ -421,6 +431,9 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     return store.migrateLocalStorage(window.localStorage);
   }, [store]);
 
+  const buildOperationsReport = useCallback((input: Parameters<FieldsteadRepository['buildOperationsReport']>[0]) => store.buildOperationsReport(input), [store]);
+  const exportOperationsReportCsv = useCallback((report: Parameters<FieldsteadRepository['exportOperationsReportCsv']>[0]) => store.exportOperationsReportCsv(report), [store]);
+
   return {
     ...snapshot,
     mutateJob: store.mutateJob.bind(store),
@@ -441,6 +454,8 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     generateRecurringOccurrences: store.generateRecurringOccurrences.bind(store),
     getEstimateForJob: store.getEstimateForJob.bind(store),
     saveEstimate: store.saveEstimate.bind(store),
+    buildOperationsReport,
+    exportOperationsReportCsv,
     listAssignedJobs: store.listAssignedJobs.bind(store),
     getFieldJobState: store.getFieldJobState.bind(store),
     recordFieldEvent: store.recordFieldEvent.bind(store),

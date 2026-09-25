@@ -40,6 +40,7 @@ import {
   type ServiceRequest,
 } from '../../fieldstead-domain/src';
 import type { OperationResult, SyncCursor, SyncOperation, SyncOutbox } from '../../fieldstead-sync/src';
+import { buildOperationsReport, exportOperationsReportCsv, type OperationsReport, type OperationsReportInput } from './reporting';
 
 export type StoreMetadata = {
   key: string;
@@ -338,6 +339,16 @@ export class FieldsteadRepository extends Dexie implements SyncOutbox {
     const jobs = (await this.jobs.toArray()).filter((job) => { const scheduled = job.scheduledFor ? Date.parse(job.scheduledFor) : Number.NaN; return Number.isFinite(scheduled) && scheduled >= start && scheduled < end; }).sort((left, right) => left.scheduledFor!.localeCompare(right.scheduledFor!) || left.id.localeCompare(right.id));
     return Promise.all(jobs.map(async (job) => ({ job, assignments: await this.listActiveAssignments(job.id) })));
   }
+
+  async buildOperationsReport(input: OperationsReportInput): Promise<OperationsReport> {
+    const [jobs, customers, serviceRequests, assignments, fieldEvents, invoices, paymentEntries] = await Promise.all([
+      this.jobs.toArray(), this.customers.toArray(), this.serviceRequests.toArray(), this.assignments.toArray(),
+      this.fieldEvents.toArray(), this.invoices.toArray(), this.paymentEntries.toArray(),
+    ]);
+    return buildOperationsReport(input, { jobs, customers, serviceRequests, assignments, fieldEvents, invoices, paymentEntries });
+  }
+
+  exportOperationsReportCsv(report: OperationsReport): string { return exportOperationsReportCsv(report); }
 
   async scheduleJob(input: ScheduleJobInput): Promise<{ replayed: boolean; job: Job; assignment?: JobAssignment }> {
     this.requireDispatcher(input.actorRole);

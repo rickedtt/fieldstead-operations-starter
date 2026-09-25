@@ -31,8 +31,10 @@ import { buildEmailIntakeConversion, type EmailIntakeApproval, type EmailIntakeD
 import type { Customer as DurableCustomer } from '../packages/fieldstead-domain/src';
 import { buildCalendarDays, listUnscheduledJobs, type CalendarMode } from './dispatch-calendar';
 import { deriveSyncStatus, syncStatusLabel } from './sync-status';
+import { ReportingView } from './reporting-view';
+import type { OperationsReport, OperationsReportFilters } from '../packages/fieldstead-local-store/src/reporting';
 
-type View = 'Overview' | 'Dispatch' | 'Assigned Jobs' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Email' | 'Finance' | 'Settings';
+type View = 'Overview' | 'Dispatch' | 'Assigned Jobs' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Email' | 'Finance' | 'Reporting' | 'Settings';
 type Theme = 'dark' | 'light';
 type EmailConnectionInput = { provider: string; email: string; displayName: string; username: string; password: string; imap: { host: string; port: number; secure: boolean }; smtp: { host: string; port: number; secure: boolean } };
 type EmailMessage = RenderableEmailMessage & { subject: string; from: string; fromName: string; receivedAt: string; unread: boolean; starred?: boolean };
@@ -163,6 +165,11 @@ export default function Home() {
   const [toast, setToast] = useState('');
   const [setupState, setSetupState] = useState<SetupState | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [reportFilters, setReportFilters] = useState<OperationsReportFilters>({});
+  const [report, setReport] = useState<OperationsReport>();
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<Error | null>(null);
+  const buildOperationsReport = localJobs.buildOperationsReport;
   const syncStatus = { connected: false, syncing: false, ...localJobs.sync };
 
   useEffect(() => {
@@ -180,6 +187,16 @@ export default function Home() {
     window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close);
   }, []);
   useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(''), 2800); return () => window.clearTimeout(id); }, [toast]);
+  useEffect(() => {
+    if (view !== 'Reporting') return;
+    let cancelled = false;
+    const generatedAt = new Date().toISOString();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    void buildOperationsReport({ generatedAt, timezone, filters: reportFilters })
+      .then((next) => { if (!cancelled) { setReport(next); setReportError(null); setReportLoading(false); } })
+      .catch((error: unknown) => { if (!cancelled) { setReportError(error instanceof Error ? error : new Error(String(error))); setReportLoading(false); } });
+    return () => { cancelled = true; };
+  }, [view, reportFilters, buildOperationsReport]);
 
   const jobs = useMemo(() => searchJobs(state, query, statusFilter), [state, query, statusFilter]);
   const selectedJob = state.jobs.find((job) => job.id === selectedJobId);
@@ -282,6 +299,18 @@ export default function Home() {
     setSetupState({ ...setupState, currentStep: 'review' });
     setSetupOpen(true);
   }
+  function changeReportFilters(next: OperationsReportFilters) {
+    setReportLoading(true); setReportError(null); setReportFilters(next);
+  }
+  function exportReport() {
+    if (!report) return;
+    const csv = localJobs.exportOperationsReportCsv(report);
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = `fieldstead-operations-report-${report.generatedAt.slice(0, 10)}.csv`;
+    link.click(); URL.revokeObjectURL(url);
+    setToast('Visible report exported');
+  }
 
   return (
     <main className={cx('app-shell', `theme-${theme}`, sidebarCollapsed && 'sidebar-collapsed')}>
@@ -289,7 +318,7 @@ export default function Home() {
         <div className="brand"><Image className="brand-logo brand-logo-full" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/><Image className="brand-logo-compact" src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems" priority/></div>
         <button className="sidebar-toggle" type="button" aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? '›' : '‹'}</button>
         <nav aria-label="Main navigation">
-          {(['Overview','Dispatch','Assigned Jobs','Jobs','Customers','Activity','Client Delivery','Email','Finance','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Dispatch: '▦', 'Assigned Jobs': '✓', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Email: '✉', Finance: '$', Settings: '⚙' } as Record<View, string>)[item]; return (
+          {(['Overview','Dispatch','Assigned Jobs','Jobs','Customers','Activity','Client Delivery','Email','Finance','Reporting','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Dispatch: '▦', 'Assigned Jobs': '✓', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Email: '✉', Finance: '$', Reporting: '▥', Settings: '⚙' } as Record<View, string>)[item]; return (
             <button key={item} className={cx('nav-item', view === item && 'active')} onClick={() => setView(item)}>
               <span className="nav-icon" aria-hidden="true">{icon}</span><span className="nav-label">{item}</span>{item === 'Jobs' && <b>{openJobs.length}</b>}
             </button>
@@ -317,6 +346,7 @@ export default function Home() {
           {view === 'Client Delivery' && <ClientDeliveryView state={state} applyImport={applyStagedImport} restore={restoreBackup} />}
           {view === 'Email' && <EmailView state={state} localData={localJobs} />}
           {view === 'Finance' && <FinanceView state={state} />}
+          {view === 'Reporting' && <ReportingView report={report} loading={reportLoading} error={reportError} customers={state.customers.map((customer) => ({ id: customer.id, name: customer.name }))} assignees={[...new Map(state.jobs.filter((job) => job.crew && job.crew !== 'Unassigned').map((job) => [job.crew, { id: job.crew, name: job.crew }])).values()]} filters={reportFilters} onFiltersChange={changeReportFilters} onExport={exportReport} />}
           {view === 'Settings' && <SettingsView theme={theme} setTheme={setTheme} migratePreviousData={() => void migratePreviousData()} reopenSetup={reopenSetup} />}
         </div>
 
