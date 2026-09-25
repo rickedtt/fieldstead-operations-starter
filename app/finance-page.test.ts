@@ -11,6 +11,7 @@ describe('Finance tab foundation', () => {
     expect(page).toContain('function FinanceView');
     expect(page).toContain('QuickBooks not connected');
     expect(page).toContain('Read-only local summary');
+    expect(page).toContain('<QuickBooksReadinessPanel />');
   });
 
   it('provides reusable finance layouts that remain fluid', () => {
