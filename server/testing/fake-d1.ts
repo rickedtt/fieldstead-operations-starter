@@ -73,6 +73,7 @@ export class FakeD1Database {
       paymentWebhookEvents: structuredClone(this.paymentWebhookEvents),
       portalInvitations: structuredClone(this.portalInvitations),
       portalSessions: structuredClone(this.portalSessions),
+      portalEstimates: structuredClone(this.portalEstimates),
       mutations: structuredClone(this.mutations),
     };
     try {
@@ -89,6 +90,7 @@ export class FakeD1Database {
       this.paymentWebhookEvents.splice(0, this.paymentWebhookEvents.length, ...snapshots.paymentWebhookEvents);
       this.portalInvitations.splice(0, this.portalInvitations.length, ...snapshots.portalInvitations);
       this.portalSessions.splice(0, this.portalSessions.length, ...snapshots.portalSessions);
+      this.portalEstimates.splice(0, this.portalEstimates.length, ...snapshots.portalEstimates);
       this.mutations.splice(0, this.mutations.length, ...snapshots.mutations);
       throw error;
     }
@@ -118,6 +120,12 @@ export class FakeD1Database {
       ) ?? null;
     }
     if (query.includes('FROM portal_estimates')) {
+      if (query.includes('JOIN customers')) {
+        const [organizationId, id] = values;
+        const estimate = this.portalEstimates.find((row) => row.organization_id === organizationId && row.id === id);
+        const customer = estimate && this.customers.find((row) => row.organization_id === organizationId && row.id === estimate.customer_id);
+        return estimate && customer ? { ...estimate, customer_name: customer.name, customer_email: customer.email } : null;
+      }
       const [organizationId, customerId, id] = values;
       return this.portalEstimates.find((row) =>
         row.organization_id === organizationId && row.customer_id === customerId &&
@@ -199,6 +207,10 @@ export class FakeD1Database {
     } else if (query.includes('UPDATE portal_sessions SET revoked_at')) {
       const [revokedAt, organizationId, invitationId] = values;
       for (const session of this.portalSessions) if (session.organization_id === organizationId && session.invitation_id === invitationId && session.revoked_at === null) { session.revoked_at = revokedAt; changes += 1; }
+    } else if (query.includes('UPDATE portal_estimates SET status')) {
+      const [status, decidedAt, idempotencyKey, resultJson, updatedAt, organizationId, customerId, id, version, now] = values;
+      const estimate = this.portalEstimates.find((row) => row.organization_id === organizationId && row.customer_id === customerId && row.id === id && row.status === 'sent' && row.version === version && row.decided_at === null && String(row.expires_at) > String(now));
+      if (estimate) { Object.assign(estimate, { status, decided_at: decidedAt, decision_idempotency_key: idempotencyKey, decision_result_json: resultJson, updated_at: updatedAt }); changes = 1; }
     } else if (query.includes('INSERT INTO jobs')) {
       const [id, organizationId, customerId, assignedUserId, service, description,
         status, scheduledFor, quoteAmount, quoteMargin, invoiceAmount, createdAt, updatedAt] = values;
@@ -223,6 +235,10 @@ export class FakeD1Database {
         Object.assign(job, payload, { version: Number(job.version) + 1, updated_at: updatedAt });
         changes = 1;
       }
+    } else if (query.includes('INSERT INTO activity_events') && query.includes('SELECT') && query.includes('portal_estimates')) {
+      const [id, organizationId, customerId, eventType, detailJson, occurredAt, createdAt, updatedAt, checkedOrganizationId, checkedCustomerId, estimateId, idempotencyKey] = values;
+      const estimate = this.portalEstimates.find((row) => row.organization_id === checkedOrganizationId && row.customer_id === checkedCustomerId && row.id === estimateId && row.decision_idempotency_key === idempotencyKey);
+      if (estimate) { this.activities.push({ id, organization_id: organizationId, customer_id: customerId, actor_user_id: null, event_type: eventType, detail_json: detailJson, occurred_at: occurredAt, created_at: createdAt, updated_at: updatedAt }); changes = 1; }
     } else if (query.includes('INSERT INTO activity_events') && query.includes('SELECT')) {
       const [id, detailJson, occurredAt, createdAt, updatedAt, organizationId, invoiceId] = values;
       const invoice = this.invoices.find(

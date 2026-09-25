@@ -32,8 +32,8 @@
 
 - [ ] Model estimate line items, taxes, discounts, terms, attachments, and version history.
 - [ ] Create printable preview/PDF generation without sending.
-- [ ] Add approval/decline recording and revision workflow.
-- [ ] Gate email/SMS delivery behind reviewed templates, consent, confirmation, and delivery audit.
+- [x] Add immutable, tenant-safe approval/decline recording for the current sent estimate version; revision workflow remains future work.
+- [ ] Gate email/SMS delivery behind reviewed templates, consent, confirmation, and delivery audit. Owner-only estimate email preview with a stable content hash is implemented; execution is deferred until recipient consent/suppression and provider-safe send controls exist.
 - [ ] Convert an accepted estimate to a job without copying mutable data incorrectly.
 
 ## Stage 3 — Scheduling and dispatch
