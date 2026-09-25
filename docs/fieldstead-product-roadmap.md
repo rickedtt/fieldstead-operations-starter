@@ -60,6 +60,11 @@
 - [ ] Add communication timeline and failed-delivery retry controls.
 - [ ] Keep bulk actions reversible where provider capabilities permit and clearly mark destructive actions.
 
+## Stage 5B — Outside-AI advisory boundary
+
+- [x] Add a disabled-by-default, provider-neutral outside-AI advisory boundary for summary, intake, draft, and route suggestions with fixture-only execution, redaction preview, strict token/cost/quota/timeout controls, provenance/confidence, owner confirmation, no-write audit metadata, prompt-injection blocking, and deterministic fallback.
+- [ ] Add any live AI provider only after explicit security/privacy review, encrypted credential design, durable metering, production model evaluation, and owner-controlled enablement; no automatic messaging, scheduling, pricing, accounting, payment, or record mutation is authorized.
+
 ## Stage 6 — Finance, invoices, payments, and QuickBooks
 
 ### 6A — Local read-only foundation

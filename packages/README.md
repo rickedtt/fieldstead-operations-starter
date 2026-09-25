@@ -48,6 +48,10 @@ test double; it does not expose a server route or provide persistence. See the
 [sync architecture](./fieldstead-sync/README.md) for idempotency rules and the
 remaining authenticated server work.
 
+## `fieldstead-ai-advisory`
+
+`packages/fieldstead-ai-advisory/src/index.ts` provides a dependency-free, disabled-by-default outside-AI advisory boundary. It defines provider-neutral summary, intake, draft, and route suggestion contracts; previews redaction/minimization; enforces token, cost, quota, timeout, and prompt-injection safeguards; and returns provenance, confidence, owner-confirmation requirements, no-write audit metadata, and deterministic local fallback. It has no live provider, credentials, network calls, storage, or mutation behavior. See the [package README](./fieldstead-ai-advisory/README.md) for the safety boundary and deferred live-provider work.
+
 ## `fieldstead-quickbooks`
 
 `packages/fieldstead-quickbooks/src/index.ts` provides a dependency-free,
