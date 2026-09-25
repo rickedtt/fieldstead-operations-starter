@@ -30,10 +30,10 @@ class FakeStatement {
   }
 
   all<T = Row>(): Promise<D1Result<T>> {
-    const row = this.database.first(this.query, this.parameters) as T | null;
+    const rows = this.database.all(this.query, this.parameters) as T[];
     return Promise.resolve({
       success: true,
-      results: row ? [row] : [],
+      results: rows,
       meta: { changes: 0 } as D1Result<T>['meta'],
     });
   }
@@ -50,6 +50,8 @@ export class FakeD1Database {
   readonly activities: Row[] = [];
   readonly invoices: Row[] = [];
   readonly paymentWebhookEvents: Row[] = [];
+  readonly portalSessions: Row[] = [];
+  readonly portalEstimates: Row[] = [];
   readonly mutations: StoredMutation[] = [];
   failNextBatch = false;
 
@@ -92,6 +94,19 @@ export class FakeD1Database {
   }
 
   first(query: string, values: unknown[]): Row | null {
+    if (query.includes('FROM portal_sessions')) {
+      const [secretHash, now] = values;
+      return this.portalSessions.find((row) =>
+        row.secret_hash === secretHash && row.revoked_at === null && String(row.expires_at) > String(now),
+      ) ?? null;
+    }
+    if (query.includes('FROM portal_estimates')) {
+      const [organizationId, customerId, id] = values;
+      return this.portalEstimates.find((row) =>
+        row.organization_id === organizationId && row.customer_id === customerId &&
+        (id === undefined || row.id === id),
+      ) ?? null;
+    }
     if (query.includes('FROM users')) {
       const [id, organizationId] = values;
       return this.users.find((row) => row.id === id && row.organization_id === organizationId) ?? null;
@@ -107,15 +122,21 @@ export class FakeD1Database {
       return this.paymentWebhookEvents.find((row) => row.provider_event_id === providerEventId) ?? null;
     }
     if (query.includes('FROM invoices')) {
-      const [organizationId, id] = values;
+      const [organizationId, second, third] = values;
       return this.invoices.find(
-        (row) => row.organization_id === organizationId && row.id === id,
+        (row) => row.organization_id === organizationId &&
+          (query.includes('customer_id = ?')
+            ? row.customer_id === second && (third === undefined || row.id === third)
+            : row.id === second),
       ) ?? null;
     }
     if (query.includes('FROM jobs')) {
-      const [organizationId, id] = values;
+      const [organizationId, second, third] = values;
       return this.jobs.find(
-        (row) => row.organization_id === organizationId && row.id === id,
+        (row) => row.organization_id === organizationId &&
+          (query.includes('customer_id = ?')
+            ? row.customer_id === second && (third === undefined || row.id === third)
+            : row.id === second),
       ) ?? null;
     }
     if (query.includes('FROM customers')) {
@@ -125,6 +146,14 @@ export class FakeD1Database {
       ) ?? null;
     }
     return null;
+  }
+
+  all(query: string, values: unknown[]): Row[] {
+    const [organizationId, customerId] = values;
+    if (query.includes('FROM portal_estimates')) return this.portalEstimates.filter((row) => row.organization_id === organizationId && row.customer_id === customerId);
+    if (query.includes('FROM invoices')) return this.invoices.filter((row) => row.organization_id === organizationId && row.customer_id === customerId);
+    if (query.includes('FROM jobs')) return this.jobs.filter((row) => row.organization_id === organizationId && row.customer_id === customerId);
+    return [];
   }
 
   run(query: string, values: unknown[]): D1Result<unknown> {
