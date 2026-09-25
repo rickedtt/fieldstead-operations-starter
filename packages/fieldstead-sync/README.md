@@ -36,8 +36,10 @@ those production boundaries are configured.
 
 ## Implemented server boundary
 
-The server verifies HS256 JWT signatures and time claims, then looks up the
-active user, organization, and role in D1. The sync service uses parameterized,
+The server authentication boundary now rejects shared-secret HS256 configuration
+and fails closed until an approved asymmetric JWT/JWKS verifier is injected. The
+verified contract requires tenant, user, session, and device claims, then looks
+up the active user, organization, and role in D1. The sync service uses parameterized,
 tenant-scoped queries, durable operation fingerprints, optimistic job versions,
 Field Crew authorization, and server-wins conflict payloads. It supports
 `job.create`, `job.update`, and `checkin.manual`.
@@ -46,8 +48,9 @@ Each operation's writes are sent in one transactional D1 `batch()`. The service
 does not claim that an entire mixed operation loop is atomic because D1 does not
 provide an interactive read/branch/write transaction API.
 
-Deployment must still configure the D1 binding and JWT secret, apply migrations,
-seed real users, manage production keys/tokens, and provide password enrollment
+Deployment must still configure the D1 binding and a reviewed asymmetric JWT/JWKS
+implementation, apply migrations, seed real users, manage production keys/tokens,
+provide a durable distributed rate-limit store/enforcer, and provide password enrollment
 and verification through a reviewed Argon2id implementation. The code documents
 the Argon2id PHC format and provisioning interface but does not ship a fake
 verifier. Browser-local PIN handling is separate from server authentication;

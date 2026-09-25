@@ -21,6 +21,8 @@ export interface SyncTransport {
 export type HttpSyncTransportOptions = {
   endpoint: string;
   getAccessToken: () => string | undefined | Promise<string | undefined>;
+  device: { deviceId: string; sessionId: string; platform: 'windows' | 'linux' | 'macos' | 'web' };
+  createRequestId?: () => string;
   fetcher?: typeof fetch;
   timeoutMs?: number;
 };
@@ -47,7 +49,15 @@ export class HttpSyncTransport implements SyncTransport {
     const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 15_000);
     let response: Response;
     try {
-      response = await this.fetcher(this.options.endpoint, { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(batch), signal: controller.signal, cache: 'no-store' });
+      response = await this.fetcher(this.options.endpoint, { method: "POST", headers: {
+        authorization: "Bearer " + token,
+        "content-type": "application/json",
+        accept: "application/json",
+        "x-request-id": this.options.createRequestId?.() ?? crypto.randomUUID(),
+        "x-fieldstead-device-id": this.options.device.deviceId,
+        "x-fieldstead-session-id": this.options.device.sessionId,
+        "x-fieldstead-platform": this.options.device.platform,
+      }, body: JSON.stringify(batch), signal: controller.signal, cache: 'no-store' });
     } catch (error) {
       if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) throw new SyncTransportError('Fieldstead sync timed out.', 'timeout', true);
       throw new SyncTransportError(error instanceof Error ? error.message : 'Fieldstead sync network failure.', 'network', true);

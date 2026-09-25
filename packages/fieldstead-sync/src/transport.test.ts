@@ -75,17 +75,17 @@ describe('in-memory sync transport test double', () => {
 
 describe('HTTP sync transport', () => {
   it('requires HTTPS endpoints', () => {
-    expect(() => new HttpSyncTransport({ endpoint: 'http://example.com/api/sync', getAccessToken: () => 'token' })).toThrow(/HTTPS/);
+    expect(() => new HttpSyncTransport({ endpoint: 'http://example.com/api/sync', getAccessToken: () => 'token', device: { deviceId: 'device-1', sessionId: 'session-1', platform: 'linux' } })).toThrow(/HTTPS/);
   });
 
   it('classifies timeout, throttling, auth, and validation failures', async () => {
-    const timeout = new HttpSyncTransport({ endpoint: 'https://example.com/api/sync', timeoutMs: 1, getAccessToken: () => 'token', fetcher: async (_url, init) => {
+    const timeout = new HttpSyncTransport({ endpoint: 'https://example.com/api/sync', timeoutMs: 1, getAccessToken: () => 'token', device: { deviceId: 'device-1', sessionId: 'session-1', platform: 'linux' }, fetcher: async (_url, init) => {
       await new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))));
       throw new Error('unreachable');
     } });
     await expect(timeout.submit(batch)).rejects.toMatchObject({ code: 'timeout', retryable: true });
     for (const [status, retryable] of [[429, true], [401, false], [400, false]] as const) {
-      const transport = new HttpSyncTransport({ endpoint: 'https://example.com/api/sync', getAccessToken: () => 'token', fetcher: async () => Response.json({ error: 'failed' }, { status }) });
+      const transport = new HttpSyncTransport({ endpoint: 'https://example.com/api/sync', getAccessToken: () => 'token', device: { deviceId: 'device-1', sessionId: 'session-1', platform: 'linux' }, fetcher: async () => Response.json({ error: 'failed' }, { status }) });
       await expect(transport.submit(batch)).rejects.toMatchObject({ status, retryable });
     }
   });

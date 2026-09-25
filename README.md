@@ -53,7 +53,7 @@ The program now follows the synchronized Starter definition used by the website 
 - “Sent,” “Paid,” and similar states are manual bookkeeping labels. No email, SMS, invoice PDF delivery, payment link, charge, bank reconciliation, or customer notification occurs.
 - The app is single-device and has no live multi-user synchronization, account provisioning, remote backup, conflict UI, or production authentication flow.
 - CSV import and JSON restore trust the owner to choose synthetic files. They are local workflows, not a production data migration service.
-- The bundled server, billing, and sync modules are safety boundaries and testable contracts, not enabled services. Their provider adapters and secrets are deliberately unconfigured.
+- The bundled server, billing, and sync modules are safety boundaries and testable contracts, not enabled services. Their provider adapters and secrets are deliberately unconfigured. `/api/health/live` reports process liveness, while `/api/health/ready` and `/api/sync` fail closed until database, issuer, audience, and an injected asymmetric verification boundary are present. No JWKS fetcher or distributed rate-limit enforcement is shipped locally.
 
 ## Remaining production boundaries
 
