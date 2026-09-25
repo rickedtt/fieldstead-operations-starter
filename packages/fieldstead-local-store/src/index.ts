@@ -5,6 +5,7 @@ import {
   parseCustomer,
   parseEstimate,
   parseEstimateLineItem,
+  parseFieldEvent,
   parseJob,
   parseOperationalAttachment,
   parseOutboxOperation,
@@ -17,6 +18,9 @@ import {
   type DispatchActorRole,
   type Estimate,
   type EstimateLineItem,
+  type FieldEvent,
+  type FieldEventKind,
+  type FieldJobState,
   type Job,
   type JobAssignment,
   type OutboxOperation,
@@ -113,6 +117,8 @@ export type DispatchRemovalInput = {
   jobId: string; actorId: string; actorRole: DispatchActorRole; operationId: string; auditEventId: string; occurredAt: string;
 };
 
+export type FieldEventInput = Omit<FieldEvent, 'id' | 'syncState' | 'conflictReason'> & { eventId: string; actorRole: DispatchActorRole };
+
 function sourceEmailKey(record: Customer | ServiceRequest): [string, string] {
   return [record.sourceEmail.accountId, record.sourceEmail.messageId];
 }
@@ -133,6 +139,7 @@ export class FieldsteadRepository extends Dexie {
   pricebookItems!: EntityTable<PricebookItem, 'id'>;
   estimates!: EntityTable<Estimate, 'id'>;
   estimateLineItems!: EntityTable<EstimateLineItem, 'id'>;
+  fieldEvents!: EntityTable<FieldEvent, 'id'>;
 
   constructor(databaseName = 'fieldstead') {
     super(databaseName);
@@ -205,10 +212,61 @@ export class FieldsteadRepository extends Dexie {
       attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt',
       estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
     });
+    this.version(8).stores({
+      jobs: 'id, customerId, serviceRequestId, status, scheduledFor, updatedAt', assignments: 'id, jobId, assigneeId, assignedAt, unassignedAt',
+      activityEvents: 'id, jobId, customerId, at', outboxOperations: 'id, status, createdAt, [entityType+entityId]', metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt', estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
+      fieldEvents: 'id, &operationId, jobId, actorId, occurredAt, syncState',
+    });
   }
 
   private requireDispatcher(role: DispatchActorRole): void {
     if (role !== 'owner_admin' && role !== 'dispatcher') throw new Error('Owner or dispatcher access is required');
+  }
+
+  async listAssignedJobs(assigneeId: string) {
+    const assignments = (await this.listActiveAssignments()).filter((item) => item.assigneeId === assigneeId);
+    const entries = await Promise.all(assignments.map(async (assignment) => ({ assignment, job: await this.jobs.get(assignment.jobId) })));
+    return entries.filter((entry): entry is { assignment: JobAssignment; job: Job } => Boolean(entry.job)).sort((left, right) => (left.job.scheduledFor || '').localeCompare(right.job.scheduledFor || '') || left.job.id.localeCompare(right.job.id));
+  }
+
+  listFieldEvents(jobId: string): Promise<FieldEvent[]> { return this.fieldEvents.where('jobId').equals(jobId).sortBy('occurredAt'); }
+
+  async getFieldJobState(jobId: string, actorId: string): Promise<FieldJobState> {
+    if (!(await this.listActiveAssignments(jobId)).some((item) => item.assigneeId === actorId)) throw new Error('Assigned crew access is required');
+    const events = await this.listFieldEvents(jobId);
+    const phases: Partial<Record<FieldEventKind, FieldJobState['phase']>> = { arrive: 'arrived', start: 'active', pause: 'paused', resume: 'active', complete: 'completed', cancel: 'canceled' };
+    const phase = events.reduce<FieldJobState['phase']>((current, event) => phases[event.kind] || current, 'scheduled');
+    const checklist = new Map<string, { id: string; label: string; completed: boolean }>();
+    for (const event of events) if (event.kind === 'checklist') checklist.set(event.checklistItemId!, { id: event.checklistItemId!, label: event.checklistLabel!, completed: event.checklistCompleted! });
+    return { phase, checklist: [...checklist.values()], syncState: events.some((event) => event.syncState === 'conflicted') ? 'conflicted' : events.some((event) => event.syncState === 'pending') ? 'pending' : 'synced' };
+  }
+
+  async recordFieldEvent(input: FieldEventInput): Promise<{ replayed: boolean; event: FieldEvent; job: Job }> {
+    if (input.actorRole !== 'field_crew') throw new Error('Field crew access is required');
+    const fingerprint = JSON.stringify(input); const key = `field-event:${input.operationId}`;
+    return this.transaction('rw', [this.jobs, this.assignments, this.fieldEvents, this.activityEvents, this.outboxOperations, this.metadata], async () => {
+      const prior = await this.metadata.get(key);
+      if (prior) { if (prior.value !== fingerprint) throw new Error('Field event idempotency key reused with different content'); const event = await this.fieldEvents.where('operationId').equals(input.operationId).first(); const job = await this.jobs.get(input.jobId); if (!event || !job) throw new Error('Field event replay is incomplete'); return { replayed: true, event, job }; }
+      if (!(await this.listActiveAssignments(input.jobId)).some((item) => item.assigneeId === input.actorId)) throw new Error('Assigned crew access is required');
+      const current = await this.jobs.get(input.jobId); if (!current) throw new Error(`Job ${input.jobId} was not found`);
+      const state = await this.getFieldJobState(input.jobId, input.actorId);
+      const allowed: Record<FieldJobState['phase'], readonly FieldEventKind[]> = { scheduled: ['arrive', 'cancel', 'note', 'checklist'], arrived: ['start', 'cancel', 'note', 'checklist'], active: ['pause', 'complete', 'cancel', 'note', 'checklist'], paused: ['resume', 'cancel', 'note', 'checklist'], completed: ['note', 'checklist'], canceled: ['note', 'checklist'] };
+      if (!allowed[state.phase].includes(input.kind)) throw new Error(`Invalid field transition: ${state.phase} -> ${input.kind}`);
+      const event = parseFieldEvent({ ...input, id: input.eventId, syncState: 'pending' });
+      const statuses: Partial<Record<FieldEventKind, Job['status']>> = { arrive: 'En route', start: 'In progress', resume: 'In progress', complete: 'Completed', cancel: 'Canceled' };
+      const job = statuses[input.kind] ? parseJob({ ...current, status: statuses[input.kind], updatedAt: input.occurredAt }) : current;
+      const audit = parseActivityEvent({ id: `activity:${input.eventId}`, at: input.occurredAt, jobId: input.jobId, customerId: current.customerId, actor: input.actorId, action: `Field ${input.kind}`, detail: input.note || input.checklistLabel || `Field crew recorded ${input.kind}.` });
+      const operation = parseOutboxOperation({ id: input.operationId, entityType: 'fieldEvent', entityId: event.id, kind: 'fieldEvent.append', payload: { ...event }, createdAt: input.occurredAt, status: 'pending' });
+      await this.fieldEvents.add(event); await this.jobs.put(job); await this.activityEvents.add(audit); await this.outboxOperations.add(operation); await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt });
+      return { replayed: false, event, job };
+    });
+  }
+
+  async markFieldEventConflicted(eventId: string, reason: string): Promise<FieldEvent> {
+    const event = await this.fieldEvents.get(eventId); if (!event) throw new Error(`Field event ${eventId} was not found`);
+    const updated = parseFieldEvent({ ...event, syncState: 'conflicted', conflictReason: reason }); await this.fieldEvents.put(updated); return updated;
   }
 
   async listActiveAssignments(jobId?: string): Promise<JobAssignment[]> {

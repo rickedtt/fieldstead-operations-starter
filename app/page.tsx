@@ -30,7 +30,7 @@ import { buildEmailIntakeConversion, type EmailIntakeApproval, type EmailIntakeD
 import type { Customer as DurableCustomer } from '../packages/fieldstead-domain/src';
 import { buildCalendarDays, listUnscheduledJobs, type CalendarMode } from './dispatch-calendar';
 
-type View = 'Overview' | 'Dispatch' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Email' | 'Finance' | 'Settings';
+type View = 'Overview' | 'Dispatch' | 'Assigned Jobs' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Email' | 'Finance' | 'Settings';
 type Theme = 'dark' | 'light';
 type EmailConnectionInput = { provider: string; email: string; displayName: string; username: string; password: string; imap: { host: string; port: number; secure: boolean }; smtp: { host: string; port: number; secure: boolean } };
 type EmailMessage = RenderableEmailMessage & { subject: string; from: string; fromName: string; receivedAt: string; unread: boolean; starred?: boolean };
@@ -286,7 +286,7 @@ export default function Home() {
         <div className="brand"><Image className="brand-logo brand-logo-full" src="/assets/fieldstead-systems-connected.svg" width={1600} height={520} alt="Fieldstead Systems" priority/><Image className="brand-logo-compact" src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems" priority/></div>
         <button className="sidebar-toggle" type="button" aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? '›' : '‹'}</button>
         <nav aria-label="Main navigation">
-          {(['Overview','Dispatch','Jobs','Customers','Activity','Client Delivery','Email','Finance','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Dispatch: '▦', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Email: '✉', Finance: '$', Settings: '⚙' } as Record<View, string>)[item]; return (
+          {(['Overview','Dispatch','Assigned Jobs','Jobs','Customers','Activity','Client Delivery','Email','Finance','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Dispatch: '▦', 'Assigned Jobs': '✓', Jobs: '▤', Customers: '♧', Activity: '◌', 'Client Delivery': '⇢', Email: '✉', Finance: '$', Settings: '⚙' } as Record<View, string>)[item]; return (
             <button key={item} className={cx('nav-item', view === item && 'active')} onClick={() => setView(item)}>
               <span className="nav-icon" aria-hidden="true">{icon}</span><span className="nav-label">{item}</span>{item === 'Jobs' && <b>{openJobs.length}</b>}
             </button>
@@ -307,6 +307,7 @@ export default function Home() {
         <div className="content">
           {view === 'Overview' && <Overview state={state} approvedPipeline={approvedPipeline} unpaid={unpaid} attention={needsAttention} openJob={(id) => setSelectedJobId(id)} goToJobs={goToJobs} />}
           {view === 'Dispatch' && <DispatchView state={state} localData={localJobs} openJob={setSelectedJobId} />}
+          {view === 'Assigned Jobs' && <AssignedJobsView localData={localJobs} openJob={setSelectedJobId} />}
           {view === 'Jobs' && <JobsView state={state} jobs={jobs} query={query} setQuery={setQuery} filter={statusFilter} setFilter={setStatusFilter} openJob={setSelectedJobId} />}
           {view === 'Customers' && <CustomersView state={state} query={query} setQuery={setQuery} openCustomer={setSelectedCustomerId} newCustomer={() => setModal('customer')} />}
           {view === 'Activity' && <ActivityView state={state} openJob={setSelectedJobId} />}
@@ -350,13 +351,30 @@ export default function Home() {
   );
 }
 
+function AssignedJobsView({ localData, openJob }: { localData: ReturnType<typeof useFieldsteadLocalJobs>; openJob:(id:string)=>void }) {
+  const actorId = 'fieldstead-owner';
+  const [assigned, setAssigned] = useState<Awaited<ReturnType<typeof localData.listAssignedJobs>>>([]);
+  const [selectedId, setSelectedId] = useState(''); const [note, setNote] = useState(''); const [message, setMessage] = useState('Offline-ready local queue. New actions remain Pending until a sync system acknowledges them.');
+  const [syncState, setSyncState] = useState<'Pending'|'Synced'|'Conflicted'>('Synced');
+  const refresh = useCallback(async () => { const entries = await localData.listAssignedJobs(actorId); setAssigned(entries); setSelectedId((current) => current || entries[0]?.job.id || ''); }, [localData]);
+  useEffect(() => { const timer = window.setTimeout(() => { void refresh(); }, 0); return () => window.clearTimeout(timer); }, [refresh]);
+  const selected = assigned.find((entry) => entry.job.id === selectedId)?.job || assigned[0]?.job;
+  async function act(kind: 'arrive'|'start'|'pause'|'resume'|'complete'|'cancel'|'note'|'checklist', extra: Record<string, unknown> = {}) { if (!selected) return; try { setSyncState('Pending'); await localData.recordFieldEvent({ jobId: selected.id, actorId, actorRole: 'field_crew', kind, ...extra }); await refresh(); setMessage(`${selected.id}: ${kind} saved locally.`); setNote(''); } catch (error) { setSyncState('Conflicted'); setMessage(error instanceof Error ? error.message : 'Field action could not be saved.'); } }
+  return <div className="assigned-jobs-page">
+    <section className="field-banner"><div><p className="eyebrow">FIELD / MOBILE MINIMUM</p><h2>Assigned jobs</h2><p>Only work assigned to this crew is shown. No location tracking, signatures, customer communication, or remote-sync claim.</p></div><span className={`field-sync field-sync-${syncState.toLowerCase()}`}>{syncState}</span></section>
+    <p className="field-offline-note">Offline-ready local queue · Pending means stored locally · Synced requires acknowledgment · Conflicted needs review</p>
+    {!assigned.length ? <Empty title="No assigned jobs" detail="Dispatch must assign this crew before field access is available."/> : <div className="assigned-jobs-layout"><div className="assigned-job-list">{assigned.map(({ job }) => <button key={job.id} className={cx('assigned-job-card', selected?.id === job.id && 'active')} onClick={() => setSelectedId(job.id)}><strong>{job.service}</strong><span>{job.id} · {formatWhen(job.scheduledFor)}</span><small>{job.description}</small></button>)}</div>{selected && <section className="field-job-panel"><div className="detail-heading"><div><p className="eyebrow">ASSIGNED TO FIELDSTEAD OWNER</p><h2>{selected.service}</h2></div><StatusPill>{selected.status}</StatusPill></div><p>{selected.description}</p><button className="secondary" onClick={() => openJob(selected.id)}>Open full job</button><div className="field-action-grid" aria-label="Assigned job actions"><button onClick={() => void act('arrive')}>Arrived</button><button onClick={() => void act('start')}>Start work</button><button onClick={() => void act('pause')}>Pause</button><button onClick={() => void act('resume')}>Resume</button><button onClick={() => void act('complete')}>Complete</button><button className="danger" onClick={() => void act('cancel')}>Cancel job</button></div><form className="field-note-form" onSubmit={(event) => { event.preventDefault(); if (note.trim()) void act('note', { note: note.trim() }); }}><label>Add note<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Work notes stored as an append-only event"/></label><button className="secondary">Add note</button></form><fieldset className="field-checklist"><legend>Checklist</legend>{['Confirm access', 'Protect work area', 'Final cleanup'].map((label) => <label key={label}><input type="checkbox" onChange={(event) => void act('checklist', { checklistItemId: label.toLowerCase().replaceAll(' ', '-'), checklistLabel: label, checklistCompleted: event.target.checked })}/>{label}</label>)}</fieldset></section>}</div>}
+    <p role="status" className="dispatch-status">{message}</p>
+  </div>;
+}
+
 function DispatchView({ state, localData, openJob }: { state: OperationsState; localData: ReturnType<typeof useFieldsteadLocalJobs>; openJob:(id:string)=>void }) {
   const [mode, setMode] = useState<CalendarMode>('week'); const [focus, setFocus] = useState(() => new Date());
   const [editing, setEditing] = useState<Job>(); const [scheduledFor, setScheduledFor] = useState(''); const [durationHours, setDurationHours] = useState('2'); const [assignee, setAssignee] = useState('Fieldstead owner'); const [overrideReason, setOverrideReason] = useState('');
   const [message, setMessage] = useState('Select a job to schedule, assign, reschedule, or unassign.');
   const days = buildCalendarDays(state.jobs, focus, mode); const unscheduled = listUnscheduledJobs(state.jobs);
   function edit(job: Job) { setEditing(job); setScheduledFor(toLocalInput(job.scheduledFor)); setDurationHours(String(job.durationHours || 2)); setAssignee(job.crew === 'Unassigned' ? 'Fieldstead owner' : job.crew); setOverrideReason(''); }
-  async function saveSchedule(event: FormEvent) { event.preventDefault(); if (!editing || !scheduledFor) return; try { await localData.scheduleJob({ jobId: editing.id, scheduledFor: new Date(scheduledFor).toISOString(), durationHours: Number(durationHours), assigneeId: assignee.trim() ? assignee.trim().toLowerCase().replace(/\s+/g, '-') : undefined, assigneeName: assignee.trim() || undefined, actorId: 'Fieldstead owner', actorRole: 'owner_admin', conflictOverrideReason: overrideReason.trim() || undefined }); setMessage(`${editing.id} schedule saved.`); setEditing(undefined); } catch (error) { setMessage(error instanceof Error ? error.message : 'Schedule could not be saved.'); } }
+  async function saveSchedule(event: FormEvent) { event.preventDefault(); if (!editing || !scheduledFor) return; try { const assigneeName = assignee.trim() || undefined; const assigneeId = assigneeName === 'Fieldstead owner' ? 'fieldstead-owner' : assigneeName?.toLowerCase().replace(/\s+/g, '-'); await localData.scheduleJob({ jobId: editing.id, scheduledFor: new Date(scheduledFor).toISOString(), durationHours: Number(durationHours), assigneeId, assigneeName, actorId: 'Fieldstead owner', actorRole: 'owner_admin', conflictOverrideReason: overrideReason.trim() || undefined }); setMessage(`${editing.id} schedule saved.`); setEditing(undefined); } catch (error) { setMessage(error instanceof Error ? error.message : 'Schedule could not be saved.'); } }
   async function unassign() { if (!editing) return; try { await localData.unassignJob(editing.id); setMessage(`${editing.id} unassigned; schedule preserved.`); setEditing(undefined); } catch (error) { setMessage(error instanceof Error ? error.message : 'Job could not be unassigned.'); } }
   async function unschedule() { if (!editing) return; try { await localData.unscheduleJob(editing.id); setMessage(`${editing.id} returned to the unscheduled queue.`); setEditing(undefined); } catch (error) { setMessage(error instanceof Error ? error.message : 'Job could not be unscheduled.'); } }
   function move(amount:number) { const next = new Date(focus); next.setDate(next.getDate() + amount * (mode === 'week' ? 7 : 1)); setFocus(next); }

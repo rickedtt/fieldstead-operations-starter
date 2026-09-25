@@ -50,6 +50,13 @@ export type JobAssignment = {
   unassignedAt?: string;
 };
 
+export const FIELD_EVENT_KINDS = ['arrive', 'start', 'pause', 'resume', 'complete', 'cancel', 'note', 'checklist'] as const;
+export type FieldEventKind = (typeof FIELD_EVENT_KINDS)[number];
+export type FieldSyncState = 'pending' | 'synced' | 'conflicted';
+export type FieldEvent = { id: string; operationId: string; jobId: string; actorId: string; kind: FieldEventKind; occurredAt: string; note?: string; checklistItemId?: string; checklistLabel?: string; checklistCompleted?: boolean; syncState: FieldSyncState; conflictReason?: string };
+export type AssignedJob = { job: Job; assignment: JobAssignment };
+export type FieldJobState = { phase: 'scheduled' | 'arrived' | 'active' | 'paused' | 'completed' | 'canceled'; checklist: Array<{ id: string; label: string; completed: boolean }>; syncState: 'synced' | 'pending' | 'conflicted' };
+
 export type DispatchActorRole = 'owner_admin' | 'dispatcher' | 'field_crew';
 
 export type CalendarEntry = {
@@ -138,7 +145,7 @@ export type EstimateLineItem = { id: string; estimateId: string; position: numbe
 
 export type OutboxOperation = {
   id: string;
-  entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest' | 'estimate' | 'pricebookItem';
+  entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest' | 'estimate' | 'pricebookItem' | 'fieldEvent';
   entityId: string;
   kind: string;
   payload: Record<string, unknown>;
@@ -382,6 +389,18 @@ export function parseActivityEvent(value: unknown): ActivityEvent {
   };
 }
 
+export function parseFieldEvent(value: unknown): FieldEvent {
+  const event = record(value, 'FieldEvent');
+  const kind = enumField(event, 'kind', 'FieldEvent', FIELD_EVENT_KINDS);
+  const checklistCompleted = event.checklistCompleted === undefined ? undefined : booleanField(event, 'checklistCompleted', 'FieldEvent');
+  const note = optionalStringField(event, 'note', 'FieldEvent');
+  const checklistItemId = optionalStringField(event, 'checklistItemId', 'FieldEvent');
+  const checklistLabel = optionalStringField(event, 'checklistLabel', 'FieldEvent');
+  if (kind === 'note' && !note?.trim()) throw new TypeError('FieldEvent.note must be a non-empty string');
+  if (kind === 'checklist' && (!checklistItemId || !checklistLabel || checklistCompleted === undefined)) throw new TypeError('FieldEvent checklist fields are required');
+  return { id: stringField(event, 'id', 'FieldEvent'), operationId: stringField(event, 'operationId', 'FieldEvent'), jobId: stringField(event, 'jobId', 'FieldEvent'), actorId: stringField(event, 'actorId', 'FieldEvent'), kind, occurredAt: stringField(event, 'occurredAt', 'FieldEvent'), note, checklistItemId, checklistLabel, checklistCompleted, syncState: enumField(event, 'syncState', 'FieldEvent', ['pending', 'synced', 'conflicted'] as const), conflictReason: optionalStringField(event, 'conflictReason', 'FieldEvent') };
+}
+
 export function parseOutboxOperation(value: unknown): OutboxOperation {
   const operation = record(value, 'OutboxOperation');
   const payload = record(operation.payload, 'OutboxOperation.payload');
@@ -395,6 +414,7 @@ export function parseOutboxOperation(value: unknown): OutboxOperation {
       'serviceRequest',
       'estimate',
       'pricebookItem',
+      'fieldEvent',
     ] as const),
     entityId: stringField(operation, 'entityId', 'OutboxOperation'),
     kind: stringField(operation, 'kind', 'OutboxOperation'),

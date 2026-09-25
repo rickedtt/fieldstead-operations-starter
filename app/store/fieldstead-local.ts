@@ -292,6 +292,22 @@ export class LocalJobsStore {
     return this.repository!.saveEstimate(input);
   }
 
+  async listAssignedJobs(assigneeId: string) {
+    await this.start();
+    return this.repository!.listAssignedJobs(assigneeId);
+  }
+
+  async getFieldJobState(jobId: string, actorId: string) {
+    await this.start();
+    return this.repository!.getFieldJobState(jobId, actorId);
+  }
+
+  async recordFieldEvent(input: Omit<Parameters<FieldsteadRepository['recordFieldEvent']>[0], 'operationId' | 'eventId' | 'occurredAt'>) {
+    await this.start();
+    const operationId = this.createOperationId();
+    return this.repository!.recordFieldEvent({ ...input, operationId, eventId: `field-event:${operationId}`, occurredAt: this.now() });
+  }
+
   async scheduleJob(input: Omit<Parameters<FieldsteadRepository['scheduleJob']>[0], 'operationId' | 'auditEventId' | 'occurredAt'>) {
     await this.start();
     const occurredAt = this.now();
@@ -377,6 +393,9 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     listPricebookItems: store.listPricebookItems.bind(store),
     getEstimateForJob: store.getEstimateForJob.bind(store),
     saveEstimate: store.saveEstimate.bind(store),
+    listAssignedJobs: store.listAssignedJobs.bind(store),
+    getFieldJobState: store.getFieldJobState.bind(store),
+    recordFieldEvent: store.recordFieldEvent.bind(store),
     scheduleJob: store.scheduleJob.bind(store),
     unassignJob: store.unassignJob.bind(store),
     unscheduleJob: store.unscheduleJob.bind(store),
