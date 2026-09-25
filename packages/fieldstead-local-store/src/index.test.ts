@@ -136,6 +136,38 @@ function sampleServiceRequest(overrides: Partial<ServiceRequest> = {}): ServiceR
 }
 
 describe('durable customer and service request records', () => {
+  it('saves an owner-approved estimate atomically with snapshots, audit, outbox, and legacy quote propagation', async () => {
+    const repo = await repository();
+    const input = {
+      operationId: 'estimate-save-1', actorId: 'owner-1', actorRole: 'owner_admin' as const,
+      occurredAt: '2026-09-24T16:00:00.000Z', auditEventId: 'audit-estimate-1',
+      estimate: { id: 'estimate-1', jobId: 'HP-2000', status: 'Draft' as const, subtotalCents: 25100, audit: { createdAt: '2026-09-24T16:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-24T16:00:00.000Z', updatedBy: 'owner-1' } },
+      lines: [{ id: 'line-1', estimateId: 'estimate-1', position: 0, description: 'Gutter cleaning', quantity: 2, unit: 'visit', unitPriceCents: 12550, lineTotalCents: 25100, pricebookItemId: 'pb-1', pricebookItemName: 'Gutter cleaning' }],
+    };
+    await repo.pricebookItems.add({ id: 'pb-1', name: 'Gutter cleaning', description: 'Per visit', unit: 'visit', unitPriceCents: 12550, active: true, audit: input.estimate.audit });
+    expect((await repo.saveEstimate(input)).replayed).toBe(false);
+    await expect(repo.getEstimateForJob('HP-2000')).resolves.toMatchObject({ estimate: { subtotalCents: 25100 }, lines: [{ pricebookItemName: 'Gutter cleaning' }] });
+    await expect(repo.getJob('HP-2000')).resolves.toMatchObject({ quoteAmount: 251, quoteStatus: 'Draft' });
+    await expect(repo.activityEvents.get('audit-estimate-1')).resolves.toMatchObject({ action: 'Estimate saved' });
+    await expect(repo.outboxOperations.get('estimate-save-1')).resolves.toMatchObject({ entityType: 'estimate', kind: 'estimate.save' });
+    expect((await repo.saveEstimate(input)).replayed).toBe(true);
+    await expect(repo.estimateLineItems.count()).resolves.toBe(1);
+  });
+
+  it('rejects non-owner saves, conflicting replay, too many lines, and rolls back duplicate outbox ids', async () => {
+    const repo = await repository();
+    const audit = { createdAt: '2026-09-24T16:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-24T16:00:00.000Z', updatedBy: 'owner-1' };
+    const base = { operationId: 'estimate-save-2', actorId: 'owner-1', occurredAt: audit.createdAt, auditEventId: 'audit-estimate-2', estimate: { id: 'estimate-2', jobId: 'HP-2000', status: 'Draft' as const, subtotalCents: 100, audit }, lines: [{ id: 'line-2', estimateId: 'estimate-2', position: 0, description: 'Labor', quantity: 1, unit: 'hour', unitPriceCents: 100, lineTotalCents: 100 }] };
+    await expect(repo.saveEstimate({ ...base, actorRole: 'dispatcher' })).rejects.toThrow(/owner approval/i);
+    await repo.saveEstimate({ ...base, actorRole: 'owner_admin' });
+    await expect(repo.saveEstimate({ ...base, actorRole: 'owner_admin', estimate: { ...base.estimate, subtotalCents: 200 } })).rejects.toThrow(/idempotency key reused/i);
+    await expect(repo.saveEstimate({ ...base, operationId: 'too-many', auditEventId: 'too-many-audit', actorRole: 'owner_admin', lines: Array.from({ length: 101 }, (_, position) => ({ id: `line-${position}`, estimateId: 'estimate-2', position, description: 'Labor', quantity: 1, unit: 'hour', unitPriceCents: 1, lineTotalCents: 1 })), estimate: { ...base.estimate, subtotalCents: 101 } })).rejects.toThrow(/100/);
+    await repo.outboxOperations.add({ id: 'collision', entityType: 'job', entityId: 'HP-2000', kind: 'job.update', payload: {}, createdAt: audit.createdAt, status: 'pending' });
+    await expect(repo.saveEstimate({ ...base, operationId: 'collision', auditEventId: 'collision-audit', actorRole: 'owner_admin', estimate: { ...base.estimate, id: 'estimate-3' }, lines: [{ ...base.lines[0], id: 'line-3', estimateId: 'estimate-3' }] })).rejects.toThrow();
+    await expect(repo.estimates.get('estimate-3')).resolves.toBeUndefined();
+    await expect(repo.activityEvents.get('collision-audit')).resolves.toBeUndefined();
+  });
+
   it('migrates the existing database to durable attachment metadata without losing records', async () => {
     const name = `fieldstead-v5-${crypto.randomUUID()}`;
     const legacy = createFieldsteadRepository(name);

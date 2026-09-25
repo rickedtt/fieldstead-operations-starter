@@ -110,9 +110,13 @@ export type OperationalAttachment = {
   source: { kind: 'desktop-upload' };
 };
 
+export type PricebookItem = { id: string; name: string; description?: string; unit: string; unitPriceCents: number; active: boolean; audit: AuditMetadata };
+export type Estimate = { id: string; jobId: string; status: 'Draft'; subtotalCents: number; audit: AuditMetadata };
+export type EstimateLineItem = { id: string; estimateId: string; position: number; description: string; quantity: number; unit: string; unitPriceCents: number; lineTotalCents: number; pricebookItemId?: string; pricebookItemName?: string };
+
 export type OutboxOperation = {
   id: string;
-  entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest';
+  entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest' | 'estimate' | 'pricebookItem';
   entityId: string;
   kind: string;
   payload: Record<string, unknown>;
@@ -198,6 +202,17 @@ function numberField(value: UnknownRecord, field: string, owner: string): number
   return number;
 }
 
+function integerField(value: UnknownRecord, field: string, owner: string, minimum = 0): number {
+  const number = numberField(value, field, owner);
+  if (!Number.isInteger(number) || number < minimum) throw new TypeError(`${owner}.${field} must be an integer of at least ${minimum}`);
+  return number;
+}
+
+function booleanField(value: UnknownRecord, field: string, owner: string): boolean {
+  if (typeof value[field] !== 'boolean') throw new TypeError(`${owner}.${field} must be a boolean`);
+  return value[field];
+}
+
 function enumField<const Values extends readonly string[]>(
   value: UnknownRecord,
   field: string,
@@ -276,6 +291,26 @@ export function parseOperationalAttachment(value: unknown): OperationalAttachmen
   };
 }
 
+export function parsePricebookItem(value: unknown): PricebookItem {
+  const item = record(value, 'PricebookItem');
+  return { id: stringField(item, 'id', 'PricebookItem'), name: stringField(item, 'name', 'PricebookItem'), description: optionalStringField(item, 'description', 'PricebookItem'), unit: stringField(item, 'unit', 'PricebookItem'), unitPriceCents: integerField(item, 'unitPriceCents', 'PricebookItem'), active: booleanField(item, 'active', 'PricebookItem'), audit: parseAuditMetadata(item.audit) };
+}
+
+export function parseEstimate(value: unknown): Estimate {
+  const estimate = record(value, 'Estimate');
+  return { id: stringField(estimate, 'id', 'Estimate'), jobId: stringField(estimate, 'jobId', 'Estimate'), status: enumField(estimate, 'status', 'Estimate', ['Draft'] as const), subtotalCents: integerField(estimate, 'subtotalCents', 'Estimate'), audit: parseAuditMetadata(estimate.audit) };
+}
+
+export function parseEstimateLineItem(value: unknown): EstimateLineItem {
+  const line = record(value, 'EstimateLineItem');
+  const quantity = numberField(line, 'quantity', 'EstimateLineItem');
+  if (quantity <= 0) throw new TypeError('EstimateLineItem.quantity must be greater than zero');
+  const unitPriceCents = integerField(line, 'unitPriceCents', 'EstimateLineItem');
+  const lineTotalCents = integerField(line, 'lineTotalCents', 'EstimateLineItem');
+  if (!Number.isSafeInteger(quantity * unitPriceCents) || lineTotalCents !== quantity * unitPriceCents) throw new TypeError('EstimateLineItem.lineTotalCents must equal quantity times unitPriceCents');
+  return { id: stringField(line, 'id', 'EstimateLineItem'), estimateId: stringField(line, 'estimateId', 'EstimateLineItem'), position: integerField(line, 'position', 'EstimateLineItem'), description: stringField(line, 'description', 'EstimateLineItem'), quantity, unit: stringField(line, 'unit', 'EstimateLineItem'), unitPriceCents, lineTotalCents, pricebookItemId: optionalStringField(line, 'pricebookItemId', 'EstimateLineItem'), pricebookItemName: optionalStringField(line, 'pricebookItemName', 'EstimateLineItem') };
+}
+
 export function parseJob(value: unknown): Job {
   const job = record(value, 'Job');
   return {
@@ -336,6 +371,8 @@ export function parseOutboxOperation(value: unknown): OutboxOperation {
       'activityEvent',
       'customer',
       'serviceRequest',
+      'estimate',
+      'pricebookItem',
     ] as const),
     entityId: stringField(operation, 'entityId', 'OutboxOperation'),
     kind: stringField(operation, 'kind', 'OutboxOperation'),

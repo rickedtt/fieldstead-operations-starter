@@ -3,16 +3,22 @@ import {
   canTransitionJobStatus,
   parseActivityEvent,
   parseCustomer,
+  parseEstimate,
+  parseEstimateLineItem,
   parseJob,
   parseOperationalAttachment,
   parseOutboxOperation,
+  parsePricebookItem,
   parseServiceRequest,
   type ActivityEvent,
   type Customer,
+  type Estimate,
+  type EstimateLineItem,
   type Job,
   type JobAssignment,
   type OutboxOperation,
   type OperationalAttachment,
+  type PricebookItem,
   type ServiceRequest,
 } from '../../fieldstead-domain/src';
 
@@ -92,6 +98,8 @@ export type AttachmentDelete = {
   auditEventId: string;
 };
 
+export type EstimateSave = { operationId: string; actorId: string; actorRole: 'owner_admin' | 'dispatcher' | 'field_crew'; occurredAt: string; auditEventId: string; estimate: Estimate; lines: EstimateLineItem[] };
+
 function sourceEmailKey(record: Customer | ServiceRequest): [string, string] {
   return [record.sourceEmail.accountId, record.sourceEmail.messageId];
 }
@@ -109,6 +117,9 @@ export class FieldsteadRepository extends Dexie {
   customers!: EntityTable<Customer, 'id'>;
   serviceRequests!: EntityTable<ServiceRequest, 'id'>;
   attachments!: EntityTable<OperationalAttachment, 'id'>;
+  pricebookItems!: EntityTable<PricebookItem, 'id'>;
+  estimates!: EntityTable<Estimate, 'id'>;
+  estimateLineItems!: EntityTable<EstimateLineItem, 'id'>;
 
   constructor(databaseName = 'fieldstead') {
     super(databaseName);
@@ -157,6 +168,92 @@ export class FieldsteadRepository extends Dexie {
       customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
       serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
       attachments: 'id, [ownerType+ownerId], createdAt, checksum',
+    });
+    this.version(6).stores({
+      jobs: 'id, customerId, serviceRequestId, status, updatedAt',
+      assignments: 'id, jobId, assigneeId, assignedAt',
+      activityEvents: 'id, jobId, customerId, at',
+      outboxOperations: 'id, status, createdAt, [entityType+entityId]',
+      metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      attachments: 'id, [ownerType+ownerId], createdAt, checksum',
+      pricebookItems: 'id, name, active, audit.updatedAt',
+      estimates: 'id, &jobId, status, audit.updatedAt',
+      estimateLineItems: 'id, estimateId, [estimateId+position]',
+    });
+  }
+
+  async listPricebookItems(): Promise<PricebookItem[]> { return this.pricebookItems.orderBy('name').toArray(); }
+
+  async savePricebookItem(input: { item: PricebookItem; operationId: string; actorId: string; actorRole: 'owner_admin' | 'dispatcher' | 'field_crew'; occurredAt: string; auditEventId: string }): Promise<{ replayed: boolean; item: PricebookItem }> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to save a pricebook item');
+    const item = parsePricebookItem(input.item);
+    const fingerprint = JSON.stringify({ actorId: input.actorId, item });
+    const key = `pricebook-save:${input.operationId}`;
+    return this.transaction('rw', this.pricebookItems, this.activityEvents, this.outboxOperations, this.metadata, async () => {
+      const prior = await this.metadata.get(key);
+      if (prior) {
+        if (prior.value !== fingerprint) throw new Error('Pricebook idempotency key reused with different content');
+        const saved = await this.pricebookItems.get(item.id);
+        if (!saved) throw new Error('Pricebook replay is incomplete');
+        return { replayed: true, item: saved };
+      }
+      const event = parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, actor: input.actorId, action: 'Pricebook item saved', detail: `${item.name} saved at ${(item.unitPriceCents / 100).toFixed(2)} per ${item.unit}.` });
+      const operation = parseOutboxOperation({ id: input.operationId, entityType: 'pricebookItem', entityId: item.id, kind: 'pricebookItem.save', payload: { ...item }, createdAt: input.occurredAt, status: 'pending' });
+      await this.pricebookItems.put(item);
+      await this.activityEvents.add(event);
+      await this.outboxOperations.add(operation);
+      await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt });
+      return { replayed: false, item };
+    });
+  }
+
+  async getEstimateForJob(jobId: string): Promise<{ estimate: Estimate; lines: EstimateLineItem[] } | undefined> {
+    const estimate = await this.estimates.where('jobId').equals(jobId).first();
+    if (!estimate) return undefined;
+    return { estimate, lines: await this.estimateLineItems.where('estimateId').equals(estimate.id).sortBy('position') };
+  }
+
+  async saveEstimate(input: EstimateSave): Promise<{ replayed: boolean; estimate: Estimate; lines: EstimateLineItem[] }> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to save an estimate');
+    if (input.lines.length > 100) throw new Error('An estimate may contain at most 100 lines');
+    const estimate = parseEstimate(input.estimate);
+    const lines = input.lines.map(parseEstimateLineItem);
+    const fingerprint = JSON.stringify({ actorId: input.actorId, estimate, lines });
+    const key = `estimate-save:${input.operationId}`;
+    const prior = await this.metadata.get(key);
+    if (prior) {
+      if (prior.value !== fingerprint) throw new Error('Estimate idempotency key reused with different content');
+      const saved = await this.getEstimateForJob(estimate.jobId);
+      if (!saved) throw new Error('Estimate replay is incomplete');
+      return { replayed: true, ...saved };
+    }
+    if (lines.some((line) => line.estimateId !== estimate.id)) throw new Error('Estimate line belongs to a different estimate');
+    const subtotalCents = lines.reduce((sum, line) => sum + line.lineTotalCents, 0);
+    if (!Number.isSafeInteger(subtotalCents) || subtotalCents !== estimate.subtotalCents) throw new Error('Estimate subtotal does not match its lines');
+    return this.transaction('rw', [this.jobs, this.estimates, this.estimateLineItems, this.activityEvents, this.outboxOperations, this.metadata], async () => {
+      const priorInTransaction = await this.metadata.get(key);
+      if (priorInTransaction) {
+        if (priorInTransaction.value !== fingerprint) throw new Error('Estimate idempotency key reused with different content');
+        const saved = await this.getEstimateForJob(estimate.jobId);
+        if (!saved) throw new Error('Estimate replay is incomplete');
+        return { replayed: true, ...saved };
+      }
+      const job = await this.jobs.get(estimate.jobId);
+      if (!job) throw new Error(`Job ${estimate.jobId} was not found`);
+      const existing = await this.estimates.where('jobId').equals(estimate.jobId).first();
+      if (existing && existing.id !== estimate.id) throw new Error('Job already has a different estimate');
+      const event = parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, jobId: job.id, customerId: job.customerId, actor: input.actorId, action: 'Estimate saved', detail: `${lines.length} line item(s), ${(subtotalCents / 100).toFixed(2)} subtotal. Draft only; nothing sent.` });
+      const operation = parseOutboxOperation({ id: input.operationId, entityType: 'estimate', entityId: estimate.id, kind: 'estimate.save', payload: { estimate, lines }, createdAt: input.occurredAt, status: 'pending' });
+      await this.estimates.put(estimate);
+      await this.estimateLineItems.where('estimateId').equals(estimate.id).delete();
+      if (lines.length) await this.estimateLineItems.bulkAdd(lines);
+      await this.jobs.put(parseJob({ ...job, quoteAmount: subtotalCents / 100, quoteStatus: 'Draft', updatedAt: input.occurredAt }));
+      await this.activityEvents.add(event);
+      await this.outboxOperations.add(operation);
+      await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt });
+      return { replayed: false, estimate, lines };
     });
   }
 

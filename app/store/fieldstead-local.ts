@@ -277,6 +277,21 @@ export class LocalJobsStore {
     return this.repository!.listAttachments(ownerType, ownerId);
   }
 
+  async listPricebookItems() {
+    await this.start();
+    return this.repository!.listPricebookItems();
+  }
+
+  async getEstimateForJob(jobId: string) {
+    await this.start();
+    return this.repository!.getEstimateForJob(jobId);
+  }
+
+  async saveEstimate(input: Parameters<FieldsteadRepository['saveEstimate']>[0]) {
+    await this.start();
+    return this.repository!.saveEstimate(input);
+  }
+
   async migrateLocalStorage(storage: LegacyStorage): Promise<ImportResult> {
     try {
       await this.start();
@@ -343,6 +358,9 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     recordAttachmentAdded: store.recordAttachmentAdded.bind(store),
     recordAttachmentDeleted: store.recordAttachmentDeleted.bind(store),
     listAttachments: store.listAttachments.bind(store),
+    listPricebookItems: store.listPricebookItems.bind(store),
+    getEstimateForJob: store.getEstimateForJob.bind(store),
+    saveEstimate: store.saveEstimate.bind(store),
     migrateLocalStorage,
     replaceDemoJobs: store.replaceDemoJobs.bind(store),
     restoreSeedJobs: store.restoreSeedJobs.bind(store),

@@ -3,8 +3,11 @@ import {
   ROLE_CAPABILITIES,
   canTransitionJobStatus,
   parseCustomer,
+  parseEstimate,
+  parseEstimateLineItem,
   parseJob,
   parseOutboxOperation,
+  parsePricebookItem,
   parseServiceRequest,
 } from './index';
 
@@ -94,5 +97,20 @@ describe('customer and service request records', () => {
       status: 'Quoted', invoiceStatus: 'Not created', invoiceAmount: 0,
       createdAt: audit.createdAt, updatedAt: audit.updatedAt,
     })).toMatchObject({ serviceRequestId: 'request-1' });
+  });
+});
+
+describe('pricebook and estimate records', () => {
+  const audit = { createdAt: '2026-09-24T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-24T12:00:00.000Z', updatedBy: 'owner-1' };
+
+  it('strictly parses integer-cent pricebook items and draft estimates', () => {
+    expect(parsePricebookItem({ id: 'pb-1', name: 'Gutter cleaning', description: 'Per visit', unit: 'visit', unitPriceCents: 12550, active: true, audit })).toMatchObject({ unitPriceCents: 12550 });
+    expect(parseEstimate({ id: 'est-1', jobId: 'HP-2000', status: 'Draft', subtotalCents: 25100, audit })).toMatchObject({ status: 'Draft', subtotalCents: 25100 });
+    expect(parseEstimateLineItem({ id: 'line-1', estimateId: 'est-1', position: 0, description: 'Gutter cleaning', quantity: 2, unit: 'visit', unitPriceCents: 12550, lineTotalCents: 25100, pricebookItemId: 'pb-1', pricebookItemName: 'Gutter cleaning' })).toMatchObject({ lineTotalCents: 25100, pricebookItemName: 'Gutter cleaning' });
+  });
+
+  it('rejects fractional cents and inconsistent line totals', () => {
+    expect(() => parsePricebookItem({ id: 'pb-1', name: 'Gutter cleaning', unit: 'visit', unitPriceCents: 12.5, active: true, audit })).toThrow(/integer/);
+    expect(() => parseEstimateLineItem({ id: 'line-1', estimateId: 'est-1', position: 0, description: 'Gutter cleaning', quantity: 2, unit: 'visit', unitPriceCents: 12550, lineTotalCents: 1 })).toThrow(/lineTotalCents/);
   });
 });

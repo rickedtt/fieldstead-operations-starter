@@ -3,9 +3,9 @@
 import Image from 'next/image';
 import { FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
-  Activity, Customer, InvoiceStatus, Job, OperationsState, QuoteStatus,
+  Activity, Customer, InvoiceStatus, Job, OperationsState,
   advanceJob, createJob, nextAction, searchJobs, seedState, setInvoiceStatus,
-  setQuoteStatus, statusOrder, updateJob,
+  statusOrder, updateJob,
 } from '../lib/operations';
 import {
   PROTOTYPE_LABEL, WORKFLOW_STEPS, createBackup, defaultCsvMapping,
@@ -25,6 +25,7 @@ import { EmailMessageContent, type EmailAttachment, type RenderableEmailMessage 
 import { buildFinanceSnapshot } from './finance';
 import { proposeEmailIntakeReview, type EmailIntakeReviewProposal } from '../lib/email-intake-review';
 import { EmailIntakeReviewPanel, type EmailIntakeReviewMode } from './email-intake-review-panel';
+import { EstimateEditor, type EstimateEditorLine } from './estimate-editor';
 import { buildEmailIntakeConversion, type EmailIntakeApproval, type EmailIntakeDraft } from '../lib/email-intake-conversion';
 import type { Customer as DurableCustomer } from '../packages/fieldstead-domain/src';
 
@@ -689,12 +690,16 @@ function DrawerShell({ title, subtitle, close, children }: { title:string; subti
 function JobDrawer({ state, job, localData, close, save }: { state:OperationsState; job:Job; localData:ReturnType<typeof useFieldsteadLocalJobs>; close:()=>void; save:(next:OperationsState,message:string)=>void }) {
   const customer = getCustomer(state,job); const action = nextAction(job);
   const [scheduledFor,setScheduledFor] = useState(toLocalInput(job.scheduledFor)); const [crew,setCrew] = useState(job.crew);
+  const [estimateLines, setEstimateLines] = useState<EstimateEditorLine[]>([{ description: job.service, quantity: 1, unit: 'job', unitPriceCents: Math.round(job.quoteAmount * 100) }]);
+  const [pricebookItems, setPricebookItems] = useState<Awaited<ReturnType<typeof localData.listPricebookItems>>>([]);
+  useEffect(() => { let active = true; void Promise.all([localData.getEstimateForJob(job.id), localData.listPricebookItems()]).then(([saved, pricebook]) => { if (!active) return; setPricebookItems(pricebook); if (saved) setEstimateLines(saved.lines.map((line) => ({ description: line.description, quantity: line.quantity, unit: line.unit, unitPriceCents: line.unitPriceCents, pricebookItemId: line.pricebookItemId, pricebookItemName: line.pricebookItemName }))); }); return () => { active = false; }; }, [job.id, localData]);
+  async function saveEstimate(lines: EstimateEditorLine[]) { const occurredAt = new Date().toISOString(); const estimateId = `estimate:${job.id}`; const subtotalCents = lines.reduce((sum, line) => sum + line.quantity * line.unitPriceCents, 0); await localData.saveEstimate({ operationId: crypto.randomUUID(), actorId: 'Fieldstead owner', actorRole: 'owner_admin', occurredAt, auditEventId: `activity-${crypto.randomUUID()}`, estimate: { id: estimateId, jobId: job.id, status: 'Draft', subtotalCents, audit: { createdAt: occurredAt, createdBy: 'Fieldstead owner', updatedAt: occurredAt, updatedBy: 'Fieldstead owner' } }, lines: lines.map((line, position) => ({ id: `${estimateId}:line:${position}`, estimateId, position, ...line, lineTotalCents: line.quantity * line.unitPriceCents })) }); setEstimateLines(lines); save(updateJob(state, job.id, { quoteAmount: subtotalCents / 100, quoteStatus: 'Draft' }, 'Estimate saved', `${lines.length} line item(s) saved locally.`), 'Estimate saved'); }
   const nextStatus = job.status === 'Quoted' && job.quoteStatus !== 'Approved' ? undefined : statusOrder[statusOrder.indexOf(job.status)+1];
   return <DrawerShell title={`${job.id} · ${customer.name}`} subtitle="JOB DETAIL" close={close}>
     <div className="drawer-scroll">
       <section className="next-action"><p className="eyebrow">RECOMMENDED NEXT ACTION</p><div><span>→</span><div><strong>{action.label}</strong><p>{action.reason}</p></div></div>{nextStatus && <button onClick={() => save(advanceJob(state,job.id),`Job moved to ${nextStatus}`)}>Mark {nextStatus.toLowerCase()}</button>}</section>
       <section className="detail-section"><div className="detail-heading"><h3>Job</h3><StatusPill>{job.status}</StatusPill></div><h2>{job.service}</h2><p>{job.description || 'No work notes added.'}</p><div className="info-grid"><div><small>Customer</small><strong>{customer.name}</strong></div><div><small>Phone</small><strong>{customer.phone}</strong></div><div className="wide"><small>Property</small><strong>{customer.address}</strong></div></div></section>
-      <section className="detail-section"><div className="detail-heading"><h3>Estimate</h3><strong>{money.format(job.quoteAmount)}</strong></div><div className="segmented" role="group" aria-label="Estimate status">{(['Draft','Sent','Approved','Declined'] as QuoteStatus[]).map((status) => <button className={job.quoteStatus === status ? 'selected' : ''} key={status} onClick={() => save(setQuoteStatus(state,job.id,status),`Estimate marked ${status.toLowerCase()}`)}>{status}</button>)}</div><p className="helper">Status changes are recorded only. This dogfood app never sends real messages.</p></section>
+      <section className="detail-section"><div className="detail-heading"><h3>Estimate</h3><strong>{money.format(job.quoteAmount)}</strong></div><EstimateEditor jobId={job.id} initialLines={estimateLines} pricebookItems={pricebookItems} onSave={saveEstimate}/><p className="helper">Saved estimates remain Draft and local. This dogfood app never sends real messages.</p></section>
       <section className="detail-section"><h3>Schedule &amp; handoff</h3><div className="form-grid"><label>Visit date and time<input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)}/></label><label>Crew<input value={crew} onChange={(event) => setCrew(event.target.value)} placeholder="Unassigned"/></label></div><button className="secondary full" onClick={() => save(updateJob(state,job.id,{ scheduledFor:scheduledFor ? new Date(scheduledFor).toISOString() : undefined, crew },'Schedule updated',`${formatWhen(scheduledFor ? new Date(scheduledFor).toISOString() : undefined)} · ${crew || 'Unassigned'}`),'Schedule saved')}>Save schedule</button></section>
       <section className="detail-section"><div className="detail-heading"><h3>Invoice &amp; payment</h3><strong>{money.format(job.invoiceAmount)}</strong></div><label className="select-label full-label">Invoice state<select value={job.invoiceStatus} onChange={(event) => save(setInvoiceStatus(state,job.id,event.target.value as InvoiceStatus),`Invoice marked ${event.target.value.toLowerCase()}`)}>{(['Not created','Draft','Sent','Paid','Overdue'] as InvoiceStatus[]).map((status) => <option key={status}>{status}</option>)}</select></label><p className="helper">This tracks bookkeeping state only. No invoice or payment is transmitted.</p></section>
       <OperationalAttachments ownerType="job" ownerId={job.id} localData={localData}/>
