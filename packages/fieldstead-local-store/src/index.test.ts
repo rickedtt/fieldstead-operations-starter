@@ -179,7 +179,7 @@ describe('durable customer and service request records', () => {
       estimate: { id: 'estimate-1', jobId: 'HP-2000', status: 'Draft' as const, subtotalCents: 25100, audit: { createdAt: '2026-09-24T16:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-24T16:00:00.000Z', updatedBy: 'owner-1' } },
       lines: [{ id: 'line-1', estimateId: 'estimate-1', position: 0, description: 'Gutter cleaning', quantity: 2, unit: 'visit', unitPriceCents: 12550, lineTotalCents: 25100, pricebookItemId: 'pb-1', pricebookItemName: 'Gutter cleaning' }],
     };
-    await repo.pricebookItems.add({ id: 'pb-1', name: 'Gutter cleaning', description: 'Per visit', unit: 'visit', unitPriceCents: 12550, active: true, audit: input.estimate.audit });
+    await repo.pricebookItems.add({ id: 'pb-1', version: 1, name: 'Gutter cleaning', description: 'Per visit', unit: 'visit', unitPriceCents: 12550, active: true, audit: input.estimate.audit });
     expect((await repo.saveEstimate(input)).replayed).toBe(false);
     await expect(repo.getEstimateForJob('HP-2000')).resolves.toMatchObject({ estimate: { subtotalCents: 25100 }, lines: [{ pricebookItemName: 'Gutter cleaning' }] });
     await expect(repo.getJob('HP-2000')).resolves.toMatchObject({ quoteAmount: 251, quoteStatus: 'Draft' });

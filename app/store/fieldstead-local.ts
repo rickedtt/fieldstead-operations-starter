@@ -282,6 +282,31 @@ export class LocalJobsStore {
     return this.repository!.listPricebookItems();
   }
 
+  async listPricebookItemVersions(itemId: string) {
+    await this.start();
+    return this.repository!.listPricebookItemVersions(itemId);
+  }
+
+  async savePricebookItem(input: Parameters<FieldsteadRepository['savePricebookItem']>[0]) {
+    await this.start();
+    return this.repository!.savePricebookItem(input);
+  }
+
+  async saveRecurringServiceAgreement(input: Parameters<FieldsteadRepository['saveRecurringServiceAgreement']>[0]) {
+    await this.start();
+    return this.repository!.saveRecurringServiceAgreement(input);
+  }
+
+  async previewRecurringServiceAgreement(agreementId: string, range: Parameters<FieldsteadRepository['previewRecurringServiceAgreement']>[1]) {
+    await this.start();
+    return this.repository!.previewRecurringServiceAgreement(agreementId, range);
+  }
+
+  async generateRecurringOccurrences(input: Parameters<FieldsteadRepository['generateRecurringOccurrences']>[0]) {
+    await this.start();
+    return this.repository!.generateRecurringOccurrences(input);
+  }
+
   async getEstimateForJob(jobId: string) {
     await this.start();
     return this.repository!.getEstimateForJob(jobId);
@@ -391,6 +416,11 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     recordAttachmentDeleted: store.recordAttachmentDeleted.bind(store),
     listAttachments: store.listAttachments.bind(store),
     listPricebookItems: store.listPricebookItems.bind(store),
+    listPricebookItemVersions: store.listPricebookItemVersions.bind(store),
+    savePricebookItem: store.savePricebookItem.bind(store),
+    saveRecurringServiceAgreement: store.saveRecurringServiceAgreement.bind(store),
+    previewRecurringServiceAgreement: store.previewRecurringServiceAgreement.bind(store),
+    generateRecurringOccurrences: store.generateRecurringOccurrences.bind(store),
     getEstimateForJob: store.getEstimateForJob.bind(store),
     saveEstimate: store.saveEstimate.bind(store),
     listAssignedJobs: store.listAssignedJobs.bind(store),

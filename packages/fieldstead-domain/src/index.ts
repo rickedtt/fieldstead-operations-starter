@@ -139,9 +139,12 @@ export type OperationalAttachment = {
   source: { kind: 'desktop-upload' };
 };
 
-export type PricebookItem = { id: string; name: string; description?: string; unit: string; unitPriceCents: number; active: boolean; audit: AuditMetadata };
+export type PricebookItem = { id: string; version: number; name: string; description?: string; unit: string; unitPriceCents: number; active: boolean; audit: AuditMetadata };
 export type Estimate = { id: string; jobId: string; status: 'Draft'; subtotalCents: number; audit: AuditMetadata };
 export type EstimateLineItem = { id: string; estimateId: string; position: number; description: string; quantity: number; unit: string; unitPriceCents: number; lineTotalCents: number; pricebookItemId?: string; pricebookItemName?: string };
+export type RecurringCadence = { frequency: 'daily'; interval: number; localTime: string } | { frequency: 'weekly'; interval: number; weekdays: number[]; localTime: string };
+export type RecurringServiceAgreement = { id: string; version?: number; customerId: string; name: string; status: 'draft' | 'active' | 'paused' | 'ended'; cadence: RecurringCadence; timezone: string; startsOn: string; endsOn?: string; serviceSummary: string; serviceDetails: string; pricebookItemId?: string; pricebookItemVersion?: number; generationTarget: 'serviceRequest' | 'job'; audit: AuditMetadata };
+export type RecurringServiceOccurrence = { id: string; agreementId: string; agreementVersion: number; scheduledFor: string; localDate: string; status: 'preview' | 'generated'; generationTarget: 'serviceRequest' | 'job'; provenanceKey: string; generatedEntityId?: string; generatedAt?: string; generatedBy?: string };
 export type Invoice = { id: string; jobId: string; customerId: string; estimateId?: string; status: 'Draft' | 'Sent' | 'Paid' | 'Overdue'; subtotalCents: number; issuedAt: string; dueAt?: string; audit: AuditMetadata };
 export type InvoiceLineItem = { id: string; invoiceId: string; position: number; description: string; quantity: number; unit: string; unitPriceCents: number; lineTotalCents: number; sourceEstimateLineItemId?: string; pricebookItemId?: string; pricebookItemName?: string };
 export type PaymentEntryKind = 'payment' | 'void' | 'refund';
@@ -149,7 +152,7 @@ export type PaymentEntry = { id: string; invoiceId: string; kind: PaymentEntryKi
 
 export type OutboxOperation = {
   id: string;
-  entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest' | 'estimate' | 'pricebookItem' | 'fieldEvent' | 'invoice' | 'paymentEntry';
+  entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest' | 'estimate' | 'pricebookItem' | 'fieldEvent' | 'invoice' | 'paymentEntry' | 'recurringServiceAgreement' | 'recurringServiceOccurrence';
   entityId: string;
   kind: string;
   payload: Record<string, unknown>;
@@ -326,7 +329,82 @@ export function parseOperationalAttachment(value: unknown): OperationalAttachmen
 
 export function parsePricebookItem(value: unknown): PricebookItem {
   const item = record(value, 'PricebookItem');
-  return { id: stringField(item, 'id', 'PricebookItem'), name: stringField(item, 'name', 'PricebookItem'), description: optionalStringField(item, 'description', 'PricebookItem'), unit: stringField(item, 'unit', 'PricebookItem'), unitPriceCents: integerField(item, 'unitPriceCents', 'PricebookItem'), active: booleanField(item, 'active', 'PricebookItem'), audit: parseAuditMetadata(item.audit) };
+  return { id: stringField(item, 'id', 'PricebookItem'), version: integerField(item, 'version', 'PricebookItem', 1), name: stringField(item, 'name', 'PricebookItem'), description: optionalStringField(item, 'description', 'PricebookItem'), unit: stringField(item, 'unit', 'PricebookItem'), unitPriceCents: integerField(item, 'unitPriceCents', 'PricebookItem'), active: booleanField(item, 'active', 'PricebookItem'), audit: parseAuditMetadata(item.audit) };
+}
+
+function validIsoDate(value: string, owner: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) throw new TypeError(`${owner} must be an ISO date`);
+  return value;
+}
+
+function validTimezone(value: string): string {
+  try { new Intl.DateTimeFormat('en-US', { timeZone: value }).format(); } catch { throw new TypeError('RecurringServiceAgreement.timezone is not supported'); }
+  return value;
+}
+
+export function parseRecurringServiceAgreement(value: unknown): RecurringServiceAgreement {
+  const agreement = record(value, 'RecurringServiceAgreement');
+  const cadence = record(agreement.cadence, 'RecurringServiceAgreement.cadence');
+  const frequency = enumField(cadence, 'frequency', 'RecurringServiceAgreement.cadence', ['daily', 'weekly'] as const);
+  const interval = integerField(cadence, 'interval', 'RecurringServiceAgreement.cadence', 1);
+  const localTime = stringField(cadence, 'localTime', 'RecurringServiceAgreement.cadence');
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(localTime)) throw new TypeError('RecurringServiceAgreement.cadence.localTime is not supported');
+  let parsedCadence: RecurringCadence = { frequency: 'daily', interval, localTime };
+  if (frequency === 'weekly') {
+    if (!Array.isArray(cadence.weekdays) || cadence.weekdays.length === 0 || cadence.weekdays.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) throw new TypeError('RecurringServiceAgreement.cadence.weekdays is not supported');
+    parsedCadence = { frequency, interval, weekdays: [...new Set(cadence.weekdays as number[])].sort(), localTime };
+  }
+  const pricebookItemId = optionalStringField(agreement, 'pricebookItemId', 'RecurringServiceAgreement');
+  const pricebookItemVersion = agreement.pricebookItemVersion === undefined ? undefined : integerField(agreement, 'pricebookItemVersion', 'RecurringServiceAgreement', 1);
+  if ((pricebookItemId === undefined) !== (pricebookItemVersion === undefined)) throw new TypeError('RecurringServiceAgreement pricebook provenance must include id and version');
+  const startsOn = validIsoDate(stringField(agreement, 'startsOn', 'RecurringServiceAgreement'), 'RecurringServiceAgreement.startsOn');
+  const endsOn = optionalStringField(agreement, 'endsOn', 'RecurringServiceAgreement');
+  if (endsOn && validIsoDate(endsOn, 'RecurringServiceAgreement.endsOn') < startsOn) throw new TypeError('RecurringServiceAgreement.endsOn must not precede startsOn');
+  return { id: stringField(agreement, 'id', 'RecurringServiceAgreement'), version: agreement.version === undefined ? undefined : integerField(agreement, 'version', 'RecurringServiceAgreement', 1), customerId: stringField(agreement, 'customerId', 'RecurringServiceAgreement'), name: stringField(agreement, 'name', 'RecurringServiceAgreement'), status: enumField(agreement, 'status', 'RecurringServiceAgreement', ['draft', 'active', 'paused', 'ended'] as const), cadence: parsedCadence, timezone: validTimezone(stringField(agreement, 'timezone', 'RecurringServiceAgreement')), startsOn, endsOn, serviceSummary: stringField(agreement, 'serviceSummary', 'RecurringServiceAgreement'), serviceDetails: stringField(agreement, 'serviceDetails', 'RecurringServiceAgreement'), pricebookItemId, pricebookItemVersion, generationTarget: enumField(agreement, 'generationTarget', 'RecurringServiceAgreement', ['serviceRequest', 'job'] as const), audit: parseAuditMetadata(agreement.audit) };
+}
+
+export function parseRecurringServiceOccurrence(value: unknown): RecurringServiceOccurrence {
+  const occurrence = record(value, 'RecurringServiceOccurrence');
+  const status = enumField(occurrence, 'status', 'RecurringServiceOccurrence', ['preview', 'generated'] as const);
+  const generatedEntityId = optionalStringField(occurrence, 'generatedEntityId', 'RecurringServiceOccurrence');
+  const generatedAt = optionalStringField(occurrence, 'generatedAt', 'RecurringServiceOccurrence');
+  const generatedBy = optionalStringField(occurrence, 'generatedBy', 'RecurringServiceOccurrence');
+  if (status === 'generated' && (!generatedEntityId || !generatedAt || !generatedBy)) throw new TypeError('RecurringServiceOccurrence generated provenance is required');
+  return { id: stringField(occurrence, 'id', 'RecurringServiceOccurrence'), agreementId: stringField(occurrence, 'agreementId', 'RecurringServiceOccurrence'), agreementVersion: integerField(occurrence, 'agreementVersion', 'RecurringServiceOccurrence', 1), scheduledFor: stringField(occurrence, 'scheduledFor', 'RecurringServiceOccurrence'), localDate: validIsoDate(stringField(occurrence, 'localDate', 'RecurringServiceOccurrence'), 'RecurringServiceOccurrence.localDate'), status, generationTarget: enumField(occurrence, 'generationTarget', 'RecurringServiceOccurrence', ['serviceRequest', 'job'] as const), provenanceKey: stringField(occurrence, 'provenanceKey', 'RecurringServiceOccurrence'), generatedEntityId, generatedAt, generatedBy };
+}
+
+function zonedDateTimeToUtc(localDate: string, localTime: string, timezone: string): string {
+  const [year, month, day] = localDate.split('-').map(Number); const [hour, minute] = localTime.split(':').map(Number);
+  let guess = Date.UTC(year, month - 1, day, hour, minute);
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(guess)).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+    const represented = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute));
+    const delta = Date.UTC(year, month - 1, day, hour, minute) - represented;
+    if (delta === 0) return new Date(guess).toISOString();
+    guess += delta;
+  }
+  throw new TypeError('Recurring local time does not exist in the configured timezone');
+}
+
+export function previewRecurringServiceOccurrences(value: RecurringServiceAgreement, range: { from: string; through: string; maxOccurrences?: number }): RecurringServiceOccurrence[] {
+  const agreement = parseRecurringServiceAgreement(value); const from = validIsoDate(range.from, 'Recurring preview from'); const through = validIsoDate(range.through, 'Recurring preview through');
+  const fromMs = Date.parse(`${from}T00:00:00Z`); const throughMs = Date.parse(`${through}T00:00:00Z`); const days = Math.floor((throughMs - fromMs) / 86400000) + 1;
+  if (days < 1) throw new TypeError('Recurring preview range must be increasing');
+  if (days > 90) throw new TypeError('Recurring preview is limited to 90 days');
+  const limit = Math.min(range.maxOccurrences ?? 100, 100); if (!Number.isInteger(limit) || limit < 1) throw new TypeError('Recurring preview occurrence limit must be positive');
+  const startMs = Date.parse(`${agreement.startsOn}T00:00:00Z`); const endMs = agreement.endsOn ? Date.parse(`${agreement.endsOn}T00:00:00Z`) : Number.POSITIVE_INFINITY;
+  const results: RecurringServiceOccurrence[] = [];
+  for (let cursor = fromMs; cursor <= throughMs; cursor += 86400000) {
+    if (cursor < startMs || cursor > endMs) continue;
+    const dayOffset = Math.floor((cursor - startMs) / 86400000); const weekday = new Date(cursor).getUTCDay();
+    const matches = agreement.cadence.frequency === 'daily' ? dayOffset % agreement.cadence.interval === 0 : Math.floor(dayOffset / 7) % agreement.cadence.interval === 0 && agreement.cadence.weekdays.includes(weekday);
+    if (!matches) continue;
+    if (results.length >= limit) throw new TypeError('Recurring preview occurrence limit exceeded');
+    const localDate = new Date(cursor).toISOString().slice(0, 10); const scheduledFor = zonedDateTimeToUtc(localDate, agreement.cadence.localTime, agreement.timezone); const provenanceKey = `${agreement.id}:${scheduledFor}`;
+    results.push({ id: `preview:${provenanceKey}`, agreementId: agreement.id, agreementVersion: agreement.version ?? 1, scheduledFor, localDate, status: 'preview', generationTarget: agreement.generationTarget, provenanceKey });
+  }
+  return results;
 }
 
 export function parseEstimate(value: unknown): Estimate {
@@ -445,6 +523,8 @@ export function parseOutboxOperation(value: unknown): OutboxOperation {
       'fieldEvent',
       'invoice',
       'paymentEntry',
+      'recurringServiceAgreement',
+      'recurringServiceOccurrence',
     ] as const),
     entityId: stringField(operation, 'entityId', 'OutboxOperation'),
     kind: stringField(operation, 'kind', 'OutboxOperation'),

@@ -13,7 +13,10 @@ import {
   parseOutboxOperation,
   parsePaymentEntry,
   parsePricebookItem,
+  parseRecurringServiceAgreement,
+  parseRecurringServiceOccurrence,
   parseServiceRequest,
+  previewRecurringServiceOccurrences,
   schedulesOverlap,
   type ActivityEvent,
   type CalendarEntry,
@@ -32,6 +35,8 @@ import {
   type OperationalAttachment,
   type PaymentEntry,
   type PricebookItem,
+  type RecurringServiceAgreement,
+  type RecurringServiceOccurrence,
   type ServiceRequest,
 } from '../../fieldstead-domain/src';
 
@@ -114,6 +119,8 @@ export type AttachmentDelete = {
 export type EstimateSave = { operationId: string; actorId: string; actorRole: 'owner_admin' | 'dispatcher' | 'field_crew'; occurredAt: string; auditEventId: string; estimate: Estimate; lines: EstimateLineItem[] };
 export type InvoiceCreation = { jobId: string; invoiceId: string; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string; dueAt?: string };
 export type PaymentEntryPost = { invoiceId: string; entryId: string; kind: PaymentEntry['kind']; amountCents: number; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string; correctsEntryId?: string; note?: string };
+export type RecurringAgreementSave = { agreement: RecurringServiceAgreement; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string };
+export type RecurringOccurrenceGeneration = { agreementId: string; occurrenceIds: string[]; preview: RecurringServiceOccurrence[]; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string };
 
 export type ScheduleJobInput = {
   jobId: string; scheduledFor: string; durationHours: number; assigneeId?: string; assigneeName?: string;
@@ -151,6 +158,9 @@ export class FieldsteadRepository extends Dexie {
   invoices!: EntityTable<Invoice, 'id'>;
   invoiceLineItems!: EntityTable<InvoiceLineItem, 'id'>;
   paymentEntries!: EntityTable<PaymentEntry, 'id'>;
+  recurringServiceAgreements!: EntityTable<RecurringServiceAgreement, 'id'>;
+  recurringServiceOccurrences!: EntityTable<RecurringServiceOccurrence, 'id'>;
+  pricebookItemVersions!: EntityTable<PricebookItem, 'id'>;
 
   constructor(databaseName = 'fieldstead') {
     super(databaseName);
@@ -236,6 +246,21 @@ export class FieldsteadRepository extends Dexie {
       customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
       attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt', estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
       fieldEvents: 'id, &operationId, jobId, actorId, occurredAt, syncState', invoices: 'id, &jobId, customerId, status, issuedAt, dueAt', invoiceLineItems: 'id, invoiceId, [invoiceId+position]', paymentEntries: 'id, invoiceId, kind, occurredAt, correctsEntryId',
+    });
+    this.version(10).stores({
+      jobs: 'id, customerId, serviceRequestId, status, scheduledFor, updatedAt', assignments: 'id, jobId, assigneeId, assignedAt, unassignedAt',
+      activityEvents: 'id, jobId, customerId, at', outboxOperations: 'id, status, createdAt, [entityType+entityId]', metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt', estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
+      fieldEvents: 'id, &operationId, jobId, actorId, occurredAt, syncState', invoices: 'id, &jobId, customerId, status, issuedAt, dueAt', invoiceLineItems: 'id, invoiceId, [invoiceId+position]', paymentEntries: 'id, invoiceId, kind, occurredAt, correctsEntryId',
+      pricebookItemVersions: '[id+version], id, version, active, audit.updatedAt', recurringServiceAgreements: 'id, customerId, status, audit.updatedAt', recurringServiceOccurrences: 'id, agreementId, status, &provenanceKey, generatedEntityId',
+    }).upgrade(async (transaction) => {
+      const current = await transaction.table<PricebookItem>('pricebookItems').toArray();
+      for (const item of current) {
+        const versioned = { ...item, version: Number.isInteger(item.version) && item.version > 0 ? item.version : 1 };
+        await transaction.table('pricebookItems').put(versioned);
+        await transaction.table('pricebookItemVersions').put(versioned);
+      }
     });
   }
 
@@ -345,12 +370,14 @@ export class FieldsteadRepository extends Dexie {
 
   async listPricebookItems(): Promise<PricebookItem[]> { return this.pricebookItems.orderBy('name').toArray(); }
 
+  async listPricebookItemVersions(itemId: string): Promise<PricebookItem[]> { return (await this.pricebookItemVersions.where('id').equals(itemId).toArray()).sort((left, right) => left.version - right.version); }
+
   async savePricebookItem(input: { item: PricebookItem; operationId: string; actorId: string; actorRole: 'owner_admin' | 'dispatcher' | 'field_crew'; occurredAt: string; auditEventId: string }): Promise<{ replayed: boolean; item: PricebookItem }> {
     if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to save a pricebook item');
     const item = parsePricebookItem(input.item);
     const fingerprint = JSON.stringify({ actorId: input.actorId, item });
     const key = `pricebook-save:${input.operationId}`;
-    return this.transaction('rw', this.pricebookItems, this.activityEvents, this.outboxOperations, this.metadata, async () => {
+    return this.transaction('rw', this.pricebookItems, this.pricebookItemVersions, this.activityEvents, this.outboxOperations, this.metadata, async () => {
       const prior = await this.metadata.get(key);
       if (prior) {
         if (prior.value !== fingerprint) throw new Error('Pricebook idempotency key reused with different content');
@@ -358,13 +385,60 @@ export class FieldsteadRepository extends Dexie {
         if (!saved) throw new Error('Pricebook replay is incomplete');
         return { replayed: true, item: saved };
       }
-      const event = parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, actor: input.actorId, action: 'Pricebook item saved', detail: `${item.name} saved at ${(item.unitPriceCents / 100).toFixed(2)} per ${item.unit}.` });
+      const latest = await this.pricebookItems.get(item.id);
+      if (latest && item.version !== latest.version + 1) throw new Error('Pricebook item version must increment by one');
+      if (!latest && item.version !== 1) throw new Error('A new pricebook item must begin at version 1');
+      const event = parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, actor: input.actorId, action: 'Pricebook item saved', detail: `${item.name} version ${item.version} saved at ${(item.unitPriceCents / 100).toFixed(2)} per ${item.unit}.` });
       const operation = parseOutboxOperation({ id: input.operationId, entityType: 'pricebookItem', entityId: item.id, kind: 'pricebookItem.save', payload: { ...item }, createdAt: input.occurredAt, status: 'pending' });
       await this.pricebookItems.put(item);
+      await this.pricebookItemVersions.add(item);
       await this.activityEvents.add(event);
       await this.outboxOperations.add(operation);
       await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt });
       return { replayed: false, item };
+    });
+  }
+
+  async saveRecurringServiceAgreement(input: RecurringAgreementSave): Promise<{ replayed: boolean; agreement: RecurringServiceAgreement }> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to save a recurring service agreement');
+    const parsed = parseRecurringServiceAgreement(input.agreement); const key = `recurring-agreement-save:${input.operationId}`;
+    return this.transaction('rw', [this.customers, this.recurringServiceAgreements, this.activityEvents, this.outboxOperations, this.metadata], async () => {
+      const current = await this.recurringServiceAgreements.get(parsed.id); const agreement = { ...parsed, version: parsed.version ?? (current?.version ?? 0) + 1 };
+      const fingerprint = JSON.stringify({ actorId: input.actorId, agreement }); const prior = await this.metadata.get(key);
+      if (prior) { if (prior.value !== fingerprint) throw new Error('Recurring agreement idempotency key reused with different content'); const saved = await this.recurringServiceAgreements.get(agreement.id); if (!saved) throw new Error('Recurring agreement replay is incomplete'); return { replayed: true, agreement: saved }; }
+      if (!(await this.customers.get(agreement.customerId))) throw new Error(`Customer ${agreement.customerId} was not found`);
+      if (current && agreement.version !== (current.version ?? 1) + 1) throw new Error('Recurring agreement version must increment by one');
+      const event = parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, customerId: agreement.customerId, actor: input.actorId, action: 'Recurring agreement saved', detail: `${agreement.name} version ${agreement.version} saved. No work was generated.` });
+      const operation = parseOutboxOperation({ id: input.operationId, entityType: 'recurringServiceAgreement', entityId: agreement.id, kind: 'recurringServiceAgreement.save', payload: { agreement }, createdAt: input.occurredAt, status: 'pending' });
+      await this.recurringServiceAgreements.put(agreement); await this.activityEvents.add(event); await this.outboxOperations.add(operation); await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt }); return { replayed: false, agreement };
+    });
+  }
+
+  async previewRecurringServiceAgreement(agreementId: string, range: { from: string; through: string; maxOccurrences?: number }): Promise<RecurringServiceOccurrence[]> {
+    const agreement = await this.recurringServiceAgreements.get(agreementId); if (!agreement) throw new Error(`Recurring agreement ${agreementId} was not found`); return previewRecurringServiceOccurrences(agreement, range);
+  }
+
+  async generateRecurringOccurrences(input: RecurringOccurrenceGeneration): Promise<{ replayed: boolean; generated: RecurringServiceOccurrence[] }> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to generate recurring work');
+    if (input.occurrenceIds.length < 1 || input.occurrenceIds.length > 100) throw new Error('Select between 1 and 100 occurrences');
+    const selected = input.occurrenceIds.map((id) => input.preview.find((item) => item.id === id)).filter((item): item is RecurringServiceOccurrence => Boolean(item)).map(parseRecurringServiceOccurrence);
+    if (selected.length !== input.occurrenceIds.length) throw new Error('Selected occurrence is missing from the approved preview');
+    const fingerprint = JSON.stringify({ agreementId: input.agreementId, selected, actorId: input.actorId }); const key = `recurring-generate:${input.operationId}`;
+    return this.transaction('rw', [this.recurringServiceAgreements, this.recurringServiceOccurrences, this.serviceRequests, this.jobs, this.activityEvents, this.outboxOperations, this.metadata], async () => {
+      const prior = await this.metadata.get(key); if (prior) { if (prior.value !== fingerprint) throw new Error('Recurring generation idempotency key reused with different content'); const all = await this.recurringServiceOccurrences.where('agreementId').equals(input.agreementId).toArray(); return { replayed: true, generated: all.filter((item) => selected.some((candidate) => candidate.provenanceKey === item.provenanceKey)) }; }
+      const agreement = await this.recurringServiceAgreements.get(input.agreementId); if (!agreement) throw new Error(`Recurring agreement ${input.agreementId} was not found`);
+      if (selected.some((item) => item.agreementId !== agreement.id || item.agreementVersion !== agreement.version || item.generationTarget !== agreement.generationTarget)) throw new Error('Approved preview does not match the current agreement version');
+      for (const item of selected) if (await this.recurringServiceOccurrences.where('provenanceKey').equals(item.provenanceKey).first()) throw new Error(`Occurrence ${item.localDate} was already generated`);
+      const generated: RecurringServiceOccurrence[] = [];
+      for (const item of selected) {
+        const entityId = `${agreement.generationTarget === 'job' ? 'job' : 'request'}:${agreement.id}:${item.localDate}`;
+        if (agreement.generationTarget === 'serviceRequest') await this.serviceRequests.add(parseServiceRequest({ id: entityId, customerId: agreement.customerId, summary: agreement.serviceSummary, details: `${agreement.serviceDetails}\nPlanned occurrence: ${item.scheduledFor}`, status: 'new', sourceEmail: { accountId: `recurring:${agreement.id}`, messageId: item.provenanceKey, normalizedFrom: 'recurring@fieldstead.local' }, audit: { createdAt: input.occurredAt, createdBy: input.actorId, updatedAt: input.occurredAt, updatedBy: input.actorId } }));
+        else await this.jobs.add(parseJob({ id: entityId, customerId: agreement.customerId, service: agreement.serviceSummary, description: `${agreement.serviceDetails}\nPlanned occurrence: ${item.scheduledFor}`, quoteStatus: 'Draft', quoteAmount: 0, durationHours: 0, crew: 'Unassigned', status: 'Quoted', invoiceStatus: 'Not created', invoiceAmount: 0, createdAt: input.occurredAt, updatedAt: input.occurredAt }));
+        const occurrence = parseRecurringServiceOccurrence({ ...item, status: 'generated', generatedEntityId: entityId, generatedAt: input.occurredAt, generatedBy: input.actorId }); await this.recurringServiceOccurrences.add(occurrence); generated.push(occurrence);
+        await this.outboxOperations.add(parseOutboxOperation({ id: `${input.operationId}:${item.id}`, entityType: 'recurringServiceOccurrence', entityId: occurrence.id, kind: `recurringServiceOccurrence.generate-${agreement.generationTarget}`, payload: { occurrence, generatedEntityId: entityId }, createdAt: input.occurredAt, status: 'pending' }));
+      }
+      await this.activityEvents.add(parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, customerId: agreement.customerId, actor: input.actorId, action: 'Recurring work generated', detail: `${generated.length} draft ${agreement.generationTarget === 'job' ? 'job(s)' : 'service request(s)'} generated after explicit approval. Nothing scheduled, messaged, or invoiced.` }));
+      await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt }); return { replayed: false, generated };
     });
   }
 
