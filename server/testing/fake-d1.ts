@@ -50,6 +50,7 @@ export class FakeD1Database {
   readonly activities: Row[] = [];
   readonly invoices: Row[] = [];
   readonly paymentWebhookEvents: Row[] = [];
+  readonly portalInvitations: Row[] = [];
   readonly portalSessions: Row[] = [];
   readonly portalEstimates: Row[] = [];
   readonly mutations: StoredMutation[] = [];
@@ -70,6 +71,8 @@ export class FakeD1Database {
       activities: structuredClone(this.activities),
       invoices: structuredClone(this.invoices),
       paymentWebhookEvents: structuredClone(this.paymentWebhookEvents),
+      portalInvitations: structuredClone(this.portalInvitations),
+      portalSessions: structuredClone(this.portalSessions),
       mutations: structuredClone(this.mutations),
     };
     try {
@@ -84,6 +87,8 @@ export class FakeD1Database {
       this.activities.splice(0, this.activities.length, ...snapshots.activities);
       this.invoices.splice(0, this.invoices.length, ...snapshots.invoices);
       this.paymentWebhookEvents.splice(0, this.paymentWebhookEvents.length, ...snapshots.paymentWebhookEvents);
+      this.portalInvitations.splice(0, this.portalInvitations.length, ...snapshots.portalInvitations);
+      this.portalSessions.splice(0, this.portalSessions.length, ...snapshots.portalSessions);
       this.mutations.splice(0, this.mutations.length, ...snapshots.mutations);
       throw error;
     }
@@ -94,6 +99,18 @@ export class FakeD1Database {
   }
 
   first(query: string, values: unknown[]): Row | null {
+    if (query.includes('COUNT(*) AS count FROM portal_invitations')) {
+      const [organizationId, createdByUserId, windowStart] = values;
+      return { count: this.portalInvitations.filter((row) => row.organization_id === organizationId && row.created_by_user_id === createdByUserId && String(row.created_at) > String(windowStart)).length };
+    }
+    if (query.includes('FROM portal_invitations')) {
+      if (query.includes('secret_hash = ?')) {
+        const [secretHash, now] = values;
+        return this.portalInvitations.find((row) => row.secret_hash === secretHash && row.accepted_at === null && row.revoked_at === null && String(row.expires_at) > String(now)) ?? null;
+      }
+      const [organizationId, id] = values;
+      return this.portalInvitations.find((row) => row.organization_id === organizationId && row.id === id) ?? null;
+    }
     if (query.includes('FROM portal_sessions')) {
       const [secretHash, now] = values;
       return this.portalSessions.find((row) =>
@@ -150,6 +167,7 @@ export class FakeD1Database {
 
   all(query: string, values: unknown[]): Row[] {
     const [organizationId, customerId] = values;
+    if (query.includes('FROM portal_invitations')) return this.portalInvitations.filter((row) => row.organization_id === organizationId && row.customer_id === customerId);
     if (query.includes('FROM portal_estimates')) return this.portalEstimates.filter((row) => row.organization_id === organizationId && row.customer_id === customerId);
     if (query.includes('FROM invoices')) return this.invoices.filter((row) => row.organization_id === organizationId && row.customer_id === customerId);
     if (query.includes('FROM jobs')) return this.jobs.filter((row) => row.organization_id === organizationId && row.customer_id === customerId);
@@ -158,7 +176,30 @@ export class FakeD1Database {
 
   run(query: string, values: unknown[]): D1Result<unknown> {
     let changes = 0;
-    if (query.includes('INSERT INTO jobs')) {
+    if (query.includes('INSERT INTO portal_invitations')) {
+      const [id, organizationId, customerId, secretHash, expiresAt, createdByUserId, createdAt] = values;
+      this.portalInvitations.push({ id, organization_id: organizationId, customer_id: customerId, secret_hash: secretHash, expires_at: expiresAt, accepted_at: null, revoked_at: null, created_by_user_id: createdByUserId, created_at: createdAt });
+      changes = 1;
+    } else if (query.includes('UPDATE portal_invitations SET revoked_at')) {
+      const [revokedAt, organizationId, id] = values;
+      const invitation = this.portalInvitations.find((row) => row.organization_id === organizationId && row.id === id);
+      if (invitation) { invitation.revoked_at = revokedAt; changes = 1; }
+    } else if (query.includes('UPDATE portal_invitations SET expires_at')) {
+      const [expiresAt, organizationId, id] = values;
+      const invitation = this.portalInvitations.find((row) => row.organization_id === organizationId && row.id === id);
+      if (invitation) { invitation.expires_at = expiresAt; changes = 1; }
+    } else if (query.includes('UPDATE portal_invitations SET accepted_at')) {
+      const [acceptedAt, id, now] = values;
+      const invitation = this.portalInvitations.find((row) => row.id === id && row.accepted_at === null && row.revoked_at === null && String(row.expires_at) > String(now));
+      if (invitation) { invitation.accepted_at = acceptedAt; changes = 1; }
+    } else if (query.includes('INSERT INTO portal_sessions')) {
+      const [id, organizationId, customerId, invitationId, secretHash, expiresAt, createdAt, checkedInvitationId, acceptedAt] = values;
+      const invitation = this.portalInvitations.find((row) => row.id === checkedInvitationId && row.accepted_at === acceptedAt);
+      if (invitation) { this.portalSessions.push({ id, organization_id: organizationId, customer_id: customerId, invitation_id: invitationId, secret_hash: secretHash, expires_at: expiresAt, revoked_at: null, created_at: createdAt }); changes = 1; }
+    } else if (query.includes('UPDATE portal_sessions SET revoked_at')) {
+      const [revokedAt, organizationId, invitationId] = values;
+      for (const session of this.portalSessions) if (session.organization_id === organizationId && session.invitation_id === invitationId && session.revoked_at === null) { session.revoked_at = revokedAt; changes += 1; }
+    } else if (query.includes('INSERT INTO jobs')) {
       const [id, organizationId, customerId, assignedUserId, service, description,
         status, scheduledFor, quoteAmount, quoteMargin, invoiceAmount, createdAt, updatedAt] = values;
       this.jobs.push({
@@ -197,9 +238,10 @@ export class FakeD1Database {
         changes = 1;
       }
     } else if (query.includes('INSERT INTO activity_events')) {
-      const [id, organizationId, jobId, actorUserId, eventType, detailJson, occurredAt, createdAt] = values;
+      const portalActivity = query.includes('customer_id') && !query.includes('job_id');
+      const [id, organizationId, scopeId, actorUserId, eventType, detailJson, occurredAt, createdAt] = values;
       this.activities.push({
-        id, organization_id: organizationId, job_id: jobId,
+        id, organization_id: organizationId, ...(portalActivity ? { customer_id: scopeId } : { job_id: scopeId }),
         actor_user_id: actorUserId, event_type: eventType,
         detail_json: detailJson, occurred_at: occurredAt, created_at: createdAt,
       });

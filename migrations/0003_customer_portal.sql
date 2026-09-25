@@ -15,6 +15,8 @@ CREATE TABLE portal_invitations (
   FOREIGN KEY (organization_id, created_by_user_id) REFERENCES users (organization_id, id)
 );
 CREATE INDEX portal_invitations_scope_idx ON portal_invitations (organization_id, customer_id);
+CREATE INDEX portal_invitations_creator_rate_idx ON portal_invitations (organization_id, created_by_user_id, created_at);
+CREATE INDEX portal_invitations_expiry_idx ON portal_invitations (expires_at);
 
 CREATE TABLE portal_sessions (
   id TEXT PRIMARY KEY,
