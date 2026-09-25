@@ -292,6 +292,22 @@ export class LocalJobsStore {
     return this.repository!.saveEstimate(input);
   }
 
+  async scheduleJob(input: Omit<Parameters<FieldsteadRepository['scheduleJob']>[0], 'operationId' | 'auditEventId' | 'occurredAt'>) {
+    await this.start();
+    const occurredAt = this.now();
+    return this.repository!.scheduleJob({ ...input, occurredAt, operationId: this.createOperationId(), auditEventId: `activity-${this.createOperationId()}` });
+  }
+
+  async unassignJob(jobId: string) {
+    await this.start(); const occurredAt = this.now();
+    return this.repository!.unassignJob({ jobId, actorId: 'Fieldstead owner', actorRole: 'owner_admin', occurredAt, operationId: this.createOperationId(), auditEventId: `activity-${this.createOperationId()}` });
+  }
+
+  async unscheduleJob(jobId: string) {
+    await this.start(); const occurredAt = this.now();
+    return this.repository!.unscheduleJob({ jobId, actorId: 'Fieldstead owner', actorRole: 'owner_admin', occurredAt, operationId: this.createOperationId(), auditEventId: `activity-${this.createOperationId()}` });
+  }
+
   async migrateLocalStorage(storage: LegacyStorage): Promise<ImportResult> {
     try {
       await this.start();
@@ -361,6 +377,9 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     listPricebookItems: store.listPricebookItems.bind(store),
     getEstimateForJob: store.getEstimateForJob.bind(store),
     saveEstimate: store.saveEstimate.bind(store),
+    scheduleJob: store.scheduleJob.bind(store),
+    unassignJob: store.unassignJob.bind(store),
+    unscheduleJob: store.unscheduleJob.bind(store),
     migrateLocalStorage,
     replaceDemoJobs: store.replaceDemoJobs.bind(store),
     restoreSeedJobs: store.restoreSeedJobs.bind(store),

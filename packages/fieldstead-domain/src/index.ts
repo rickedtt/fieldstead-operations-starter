@@ -50,6 +50,28 @@ export type JobAssignment = {
   unassignedAt?: string;
 };
 
+export type DispatchActorRole = 'owner_admin' | 'dispatcher' | 'field_crew';
+
+export type CalendarEntry = {
+  job: Job;
+  assignments: JobAssignment[];
+};
+
+export function scheduleEnd(scheduledFor: string, durationHours: number): string {
+  const start = Date.parse(scheduledFor);
+  if (!Number.isFinite(start)) throw new TypeError('scheduledFor must be an ISO date-time');
+  if (!Number.isFinite(durationHours) || durationHours <= 0) throw new TypeError('durationHours must be greater than zero');
+  return new Date(start + durationHours * 60 * 60 * 1000).toISOString();
+}
+
+export function schedulesOverlap(leftStart: string, leftDurationHours: number, rightStart: string, rightDurationHours: number): boolean {
+  const leftStartMs = Date.parse(leftStart);
+  const rightStartMs = Date.parse(rightStart);
+  const leftEndMs = Date.parse(scheduleEnd(leftStart, leftDurationHours));
+  const rightEndMs = Date.parse(scheduleEnd(rightStart, rightDurationHours));
+  return leftStartMs < rightEndMs && rightStartMs < leftEndMs;
+}
+
 export type ActivityEvent = {
   id: string;
   at: string;

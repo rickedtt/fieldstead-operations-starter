@@ -9,9 +9,17 @@ import {
   parseOutboxOperation,
   parsePricebookItem,
   parseServiceRequest,
+  scheduleEnd,
+  schedulesOverlap,
 } from './index';
 
 describe('Fieldstead job status rules', () => {
+  it('uses half-open time intervals for assignment conflict detection', () => {
+    expect(scheduleEnd('2026-09-28T14:00:00.000Z', 2)).toBe('2026-09-28T16:00:00.000Z');
+    expect(schedulesOverlap('2026-09-28T14:00:00.000Z', 2, '2026-09-28T15:59:00.000Z', 1)).toBe(true);
+    expect(schedulesOverlap('2026-09-28T14:00:00.000Z', 2, '2026-09-28T16:00:00.000Z', 1)).toBe(false);
+  });
+
   it('allows only supported forward and cancellation transitions', () => {
     expect(canTransitionJobStatus('Quoted', 'Scheduled')).toBe(true);
     expect(canTransitionJobStatus('Scheduled', 'En route')).toBe(true);

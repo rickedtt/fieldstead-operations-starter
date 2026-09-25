@@ -10,8 +10,11 @@ import {
   parseOutboxOperation,
   parsePricebookItem,
   parseServiceRequest,
+  schedulesOverlap,
   type ActivityEvent,
+  type CalendarEntry,
   type Customer,
+  type DispatchActorRole,
   type Estimate,
   type EstimateLineItem,
   type Job,
@@ -100,6 +103,16 @@ export type AttachmentDelete = {
 
 export type EstimateSave = { operationId: string; actorId: string; actorRole: 'owner_admin' | 'dispatcher' | 'field_crew'; occurredAt: string; auditEventId: string; estimate: Estimate; lines: EstimateLineItem[] };
 
+export type ScheduleJobInput = {
+  jobId: string; scheduledFor: string; durationHours: number; assigneeId?: string; assigneeName?: string;
+  actorId: string; actorRole: DispatchActorRole; operationId: string; auditEventId: string; occurredAt: string;
+  conflictOverrideReason?: string;
+};
+
+export type DispatchRemovalInput = {
+  jobId: string; actorId: string; actorRole: DispatchActorRole; operationId: string; auditEventId: string; occurredAt: string;
+};
+
 function sourceEmailKey(record: Customer | ServiceRequest): [string, string] {
   return [record.sourceEmail.accountId, record.sourceEmail.messageId];
 }
@@ -181,6 +194,76 @@ export class FieldsteadRepository extends Dexie {
       pricebookItems: 'id, name, active, audit.updatedAt',
       estimates: 'id, &jobId, status, audit.updatedAt',
       estimateLineItems: 'id, estimateId, [estimateId+position]',
+    });
+    this.version(7).stores({
+      jobs: 'id, customerId, serviceRequestId, status, scheduledFor, updatedAt',
+      assignments: 'id, jobId, assigneeId, assignedAt, unassignedAt',
+      activityEvents: 'id, jobId, customerId, at',
+      outboxOperations: 'id, status, createdAt, [entityType+entityId]', metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt',
+      estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
+    });
+  }
+
+  private requireDispatcher(role: DispatchActorRole): void {
+    if (role !== 'owner_admin' && role !== 'dispatcher') throw new Error('Owner or dispatcher access is required');
+  }
+
+  async listActiveAssignments(jobId?: string): Promise<JobAssignment[]> {
+    const assignments = jobId ? await this.assignments.where('jobId').equals(jobId).toArray() : await this.assignments.toArray();
+    return assignments.filter((assignment) => !assignment.unassignedAt).sort((left, right) => left.assigneeId.localeCompare(right.assigneeId) || left.id.localeCompare(right.id));
+  }
+
+  async listUnscheduledJobs(): Promise<Job[]> {
+    return (await this.jobs.toArray()).filter((job) => !job.scheduledFor && !['Completed', 'Canceled'].includes(job.status)).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id));
+  }
+
+  async listCalendarEntries(rangeStart: string, rangeEnd: string): Promise<CalendarEntry[]> {
+    const start = Date.parse(rangeStart); const end = Date.parse(rangeEnd);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) throw new Error('Calendar range must have valid increasing ISO boundaries');
+    const jobs = (await this.jobs.toArray()).filter((job) => { const scheduled = job.scheduledFor ? Date.parse(job.scheduledFor) : Number.NaN; return Number.isFinite(scheduled) && scheduled >= start && scheduled < end; }).sort((left, right) => left.scheduledFor!.localeCompare(right.scheduledFor!) || left.id.localeCompare(right.id));
+    return Promise.all(jobs.map(async (job) => ({ job, assignments: await this.listActiveAssignments(job.id) })));
+  }
+
+  async scheduleJob(input: ScheduleJobInput): Promise<{ replayed: boolean; job: Job; assignment?: JobAssignment }> {
+    this.requireDispatcher(input.actorRole);
+    if (!input.assigneeId && input.assigneeName) throw new Error('An assignee id is required with an assignee name');
+    schedulesOverlap(input.scheduledFor, input.durationHours, input.scheduledFor, input.durationHours);
+    const overrideReason = input.conflictOverrideReason?.trim();
+    const fingerprint = JSON.stringify({ ...input, conflictOverrideReason: overrideReason }); const key = `job-schedule:${input.operationId}`;
+    return this.transaction('rw', [this.jobs, this.assignments, this.activityEvents, this.outboxOperations, this.metadata], async () => {
+      const prior = await this.metadata.get(key);
+      if (prior) { if (prior.value !== fingerprint) throw new Error('Schedule idempotency key reused with different content'); const job = await this.jobs.get(input.jobId); if (!job) throw new Error('Schedule replay is incomplete'); return { replayed: true, job, assignment: (await this.listActiveAssignments(job.id))[0] }; }
+      const current = await this.jobs.get(input.jobId); if (!current) throw new Error(`Job ${input.jobId} was not found`);
+      const active = await this.listActiveAssignments(); const conflicts: string[] = [];
+      if (input.assigneeId) for (const assignment of active) { if (assignment.assigneeId !== input.assigneeId || assignment.jobId === input.jobId) continue; const other = await this.jobs.get(assignment.jobId); if (other?.scheduledFor && schedulesOverlap(input.scheduledFor, input.durationHours, other.scheduledFor, other.durationHours)) conflicts.push(other.id); }
+      if (conflicts.length && !overrideReason) throw new Error(`Schedule conflicts with ${conflicts.sort().join(', ')}`);
+      for (const assignment of active.filter((item) => item.jobId === input.jobId)) await this.assignments.put({ ...assignment, unassignedAt: input.occurredAt });
+      const assignment = input.assigneeId ? { id: `${input.operationId}:assignment`, jobId: input.jobId, assigneeId: input.assigneeId, assigneeName: input.assigneeName, assignedAt: input.occurredAt } satisfies JobAssignment : undefined;
+      if (assignment) await this.assignments.add(assignment);
+      const job = parseJob({ ...current, scheduledFor: input.scheduledFor, durationHours: input.durationHours, crew: input.assigneeName || 'Unassigned', status: current.status === 'Quoted' ? 'Scheduled' : current.status, updatedAt: input.occurredAt });
+      const event = parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, jobId: job.id, customerId: job.customerId, actor: input.actorId, action: current.scheduledFor ? 'Job rescheduled' : 'Job scheduled', detail: `${job.scheduledFor} for ${job.durationHours} hour(s); ${job.crew}.${conflicts.length ? ` Conflict override: ${overrideReason}` : ''}` });
+      const operation = parseOutboxOperation({ id: input.operationId, entityType: 'job', entityId: job.id, kind: 'job.schedule', payload: { scheduledFor: job.scheduledFor, durationHours: job.durationHours, assigneeId: input.assigneeId, assigneeName: input.assigneeName, conflictOverrideReason: overrideReason }, createdAt: input.occurredAt, status: 'pending' });
+      await this.jobs.put(job); await this.activityEvents.add(event); await this.outboxOperations.add(operation); await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt });
+      return { replayed: false, job, assignment };
+    });
+  }
+
+  async unassignJob(input: DispatchRemovalInput): Promise<{ replayed: boolean; job: Job }> { return this.removeDispatchValue(input, 'unassign'); }
+  async unscheduleJob(input: DispatchRemovalInput): Promise<{ replayed: boolean; job: Job }> { return this.removeDispatchValue(input, 'unschedule'); }
+
+  private async removeDispatchValue(input: DispatchRemovalInput, kind: 'unassign' | 'unschedule'): Promise<{ replayed: boolean; job: Job }> {
+    this.requireDispatcher(input.actorRole); const key = `job-${kind}:${input.operationId}`; const fingerprint = JSON.stringify(input);
+    return this.transaction('rw', [this.jobs, this.assignments, this.activityEvents, this.outboxOperations, this.metadata], async () => {
+      const prior = await this.metadata.get(key); if (prior) { if (prior.value !== fingerprint) throw new Error(`${kind} idempotency key reused with different content`); const job = await this.jobs.get(input.jobId); if (!job) throw new Error(`${kind} replay is incomplete`); return { replayed: true, job }; }
+      const current = await this.jobs.get(input.jobId); if (!current) throw new Error(`Job ${input.jobId} was not found`);
+      for (const assignment of await this.listActiveAssignments(input.jobId)) await this.assignments.put({ ...assignment, unassignedAt: input.occurredAt });
+      const changes = kind === 'unschedule' ? { scheduledFor: undefined, crew: 'Unassigned' } : { crew: 'Unassigned' }; const job = parseJob({ ...current, ...changes, updatedAt: input.occurredAt });
+      const event = parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, jobId: job.id, customerId: job.customerId, actor: input.actorId, action: kind === 'unschedule' ? 'Job unscheduled' : 'Job unassigned', detail: kind === 'unschedule' ? 'Schedule and active assignment cleared. Job status was preserved.' : 'Active assignment cleared. Schedule was preserved.' });
+      const operation = parseOutboxOperation({ id: input.operationId, entityType: 'job', entityId: job.id, kind: `job.${kind}`, payload: changes, createdAt: input.occurredAt, status: 'pending' });
+      await this.jobs.put(job); await this.activityEvents.add(event); await this.outboxOperations.add(operation); await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt }); return { replayed: false, job };
     });
   }
 
