@@ -10,11 +10,12 @@ const evidenceLabels: Record<ProposalEvidence, string> = { 'from-header': 'From 
 function draftFromProposal(proposal: EmailIntakeReviewProposal): EmailIntakeDraft { return { name: proposal.proposedContact.name?.value || '', email: proposal.proposedContact.email.value, phone: proposal.proposedContact.phone?.value || '', summary: proposal.proposedRequest.summary?.value || '', service: proposal.proposedRequest.service?.value || '', location: proposal.proposedRequest.location?.value || '' }; }
 function Evidence({ source }: { source?: ProposalEvidence }) { return source ? <small className="email-intake-evidence">Evidence: {evidenceLabels[source]}</small> : <small className="email-intake-evidence missing">No evidence found</small>; }
 
-export function EmailIntakeReviewPanel({ proposal, mode, customers = [], selectedApproval = 'customer-and-request', conversionResult, onDismiss, onEdit, onApprove, onSelectApproval = () => undefined, onConfirmConversion = async () => undefined, onConfirmJobHandoff = async () => undefined }: {
+export function EmailIntakeReviewPanel({ proposal, mode, customers = [], selectedApproval = 'customer-and-request', conversionResult, onDismiss, onEdit, onApprove, onSelectApproval = () => undefined, onConfirmConversion = async () => undefined, onConfirmJobHandoff = async () => undefined, onOpenServiceRequest = () => undefined }: {
   proposal: EmailIntakeReviewProposal; mode: EmailIntakeReviewMode; customers?: Customer[]; selectedApproval?: EmailIntakeApproval; conversionResult?: EmailIntakeConversionResult;
   onDismiss: () => void; onEdit: (draft: EmailIntakeDraft) => void; onApprove: (draft: EmailIntakeDraft) => void;
   onSelectApproval?: (approval: EmailIntakeApproval) => void; onConfirmConversion?: (draft: EmailIntakeDraft, approval: EmailIntakeApproval, existingCustomerId?: string) => Promise<void> | void;
   onConfirmJobHandoff?: (serviceRequestId: string) => Promise<void> | void;
+  onOpenServiceRequest?: (serviceRequestId: string) => Promise<void> | void;
 }) {
   const [draft, setDraft] = useState(() => draftFromProposal(proposal));
   const [confirmed, setConfirmed] = useState(false);
@@ -42,6 +43,7 @@ export function EmailIntakeReviewPanel({ proposal, mode, customers = [], selecte
       <button className="primary full" type="button" disabled={!confirmed || !requestOnlyReady} onClick={() => void onConfirmConversion(draft, selectedApproval, existingCustomerId || undefined)}>Confirm durable conversion</button>
     </div>}
     {mode === 'converted' && conversionResult?.serviceRequestId && <div className="email-intake-conversion">
+      <button className="secondary full" type="button" onClick={() => void onOpenServiceRequest(conversionResult.serviceRequestId!)}>Open service request</button>
       <h4>Create draft job from this service request</h4>
       <p>No message, schedule, estimate, invoice, or payment action will occur. The job starts as an unscheduled draft with zero amounts.</p>
       <label className="confirm-import"><input type="checkbox" checked={jobHandoffConfirmed} onChange={(event) => setJobHandoffConfirmed(event.target.checked)}/><span>I reviewed this service request and approve creating one linked draft job.</span></label>

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -78,5 +78,31 @@ describe('operational attachment content storage', () => {
     const manifest = await store.backupManifest();
     expect(manifest).toMatchObject({ version: 1, attachmentCount: 1, contentIncluded: false, warning: expect.stringMatching(/not included/i) });
     expect(manifest.attachments[0]).toMatchObject({ id: 'attachment-1', checksum: expect.stringMatching(/^sha256:/) });
+  });
+
+  it('exports a complete checksum-verified managed-store backup without modifying the source store', async () => {
+    const { root, source, store } = await fixture();
+    await store.importFile({ id: 'attachment-1', ownerType: 'serviceRequest', ownerId: 'request-1', sourcePath: source, originalFilename: 'before.png', contentType: 'image/png', actorId: 'owner', createdAt: '2026-09-24T15:00:00.000Z', source: { kind: 'desktop-upload' } });
+    const sourceIndexBefore = await readFile(path.join(root, 'store', 'index.json'), 'utf8');
+    const destination = path.join(root, 'attachment-backup');
+
+    const exported = await store.exportManagedStore(destination, '2026-09-25T12:00:00.000Z');
+
+    expect(exported).toMatchObject({ attachmentCount: 1, verified: true, destination });
+    expect(JSON.parse(await readFile(path.join(destination, 'manifest.json'), 'utf8'))).toMatchObject({ version: 1, attachmentCount: 1, verified: true, contentIncluded: true });
+    expect(await readFile(path.join(destination, 'attachments', 'attachment-1', 'before.png'), 'utf8')).toBe('safe image bytes');
+    expect(await readFile(path.join(root, 'store', 'index.json'), 'utf8')).toBe(sourceIndexBefore);
+    expect((await readdir(path.join(root, 'store', 'content'))).length).toBe(1);
+  });
+
+  it('rejects managed-store export destinations inside the source store and removes failed partial exports', async () => {
+    const { root, source, store } = await fixture();
+    await store.importFile({ id: 'attachment-1', ownerType: 'job', ownerId: 'HP-2000', sourcePath: source, originalFilename: 'before.png', contentType: 'image/png', actorId: 'owner', createdAt: '2026-09-24T15:00:00.000Z', source: { kind: 'desktop-upload' } });
+    await expect(store.exportManagedStore(path.join(root, 'store', 'nested-backup'))).rejects.toThrow(/outside/i);
+
+    await writeFile((await store.contentPath('attachment-1')).path, Buffer.from('tampered'));
+    const destination = path.join(root, 'failed-backup');
+    await expect(store.exportManagedStore(destination)).rejects.toThrow(/checksum/i);
+    await expect(stat(destination)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

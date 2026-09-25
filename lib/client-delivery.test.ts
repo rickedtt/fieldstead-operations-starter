@@ -51,6 +51,7 @@ describe('synthetic backup contract', () => {
     expect(restored.kind).toBe('fieldstead-operations-starter-dogfood-backup');
     expect(restored.syntheticOnly).toBe(true);
     expect(restored.state.activity).toEqual(seedState.activity);
+    expect(backup.attachmentBoundary).toEqual({ binariesIncluded: false, metadataIncluded: false });
   });
 });
 

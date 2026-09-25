@@ -8,7 +8,7 @@ async function source(path: string) {
 }
 
 describe('operational attachment desktop bridge', () => {
-  it('exposes narrow explicit IPC operations for upload, list, preview, export, delete, and backup manifest', async () => {
+  it('exposes narrow explicit IPC operations for upload, list, preview, export, delete, manifest, and complete managed-store export', async () => {
     const [preload, main] = await Promise.all([source('electron/preload.cjs'), source('electron/main.mjs')]);
     expect(preload).toContain("chooseOperationalAttachment: (ownerType, ownerId, actorId) => ipcRenderer.invoke('fieldstead:operational-attachment-choose'");
     expect(preload).toContain("listOperationalAttachments: (ownerType, ownerId) => ipcRenderer.invoke('fieldstead:operational-attachment-list'");
@@ -16,8 +16,10 @@ describe('operational attachment desktop bridge', () => {
     expect(preload).toContain("exportOperationalAttachment: (attachmentId) => ipcRenderer.invoke('fieldstead:operational-attachment-export'");
     expect(preload).toContain("deleteOperationalAttachment: (attachmentId, actorId) => ipcRenderer.invoke('fieldstead:operational-attachment-delete'");
     expect(preload).toContain("getOperationalAttachmentBackupManifest: () => ipcRenderer.invoke('fieldstead:operational-attachment-backup-manifest')");
+    expect(preload).toContain("exportOperationalAttachmentStore: () => ipcRenderer.invoke('fieldstead:operational-attachment-store-export')");
     expect(main).toContain("ipcMain.handle('fieldstead:operational-attachment-choose'");
     expect(main).toContain("ipcMain.handle('fieldstead:operational-attachment-delete'");
+    expect(main).toContain("ipcMain.handle('fieldstead:operational-attachment-store-export'");
     expect(main).toContain("createOperationalAttachmentStore(path.join(app.getPath('userData'), 'operational-attachments'))");
   });
 
@@ -28,5 +30,14 @@ describe('operational attachment desktop bridge', () => {
     expect(main).toContain("properties: ['showOverwriteConfirmation', 'createDirectory']");
     expect(main).toContain('shell.openPath(preview.path)');
     expect(main).toContain("actorRole !== 'owner_admin'");
+    expect(main).toContain("title: 'Export complete attachment store'");
+    expect(main).toContain("await operationalAttachmentStore().exportManagedStore(choice.filePath)");
+  });
+
+  it('keeps cancellation and failures local and does not introduce network or outbox effects', async () => {
+    const [preload, main] = await Promise.all([source('electron/preload.cjs'), source('electron/main.mjs')]);
+    expect(main).toContain("if (choice.canceled || !choice.filePath) return { ok: false, canceled: true }");
+    expect(main).toContain('catch (error) { return attachmentResult(error); }');
+    expect(`${preload}\n${main}`).not.toMatch(/fetch\(|axios|outboxOperations|https?\.request/);
   });
 });

@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld(
     exportOperationalAttachment: (attachmentId) => ipcRenderer.invoke('fieldstead:operational-attachment-export', attachmentId),
     deleteOperationalAttachment: (attachmentId, actorId) => ipcRenderer.invoke('fieldstead:operational-attachment-delete', attachmentId, actorId),
     getOperationalAttachmentBackupManifest: () => ipcRenderer.invoke('fieldstead:operational-attachment-backup-manifest'),
+    exportOperationalAttachmentStore: () => ipcRenderer.invoke('fieldstead:operational-attachment-store-export'),
     getSetupState: () => ipcRenderer.invoke('fieldstead:setup-get'),
     saveSetupState: (state) => ipcRenderer.invoke('fieldstead:setup-save', state),
     getAppVersion: () => ipcRenderer.invoke('fieldstead:app-version'),

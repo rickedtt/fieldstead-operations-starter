@@ -43,7 +43,8 @@ The program now follows the synchronized Starter definition used by the website 
 - Approved unscheduled work is surfaced as a high-priority **Schedule job** action.
 - Append-only activity for workflow changes passed through job mutations.
 - Explicitly confirmed synthetic CSV staging with duplicate, missing-field, and invalid-row reporting.
-- Versioned JSON export and recovery for the complete in-app operations state.
+- Versioned JSON export and recovery for the in-app operations state. Attachment binaries and attachment metadata are explicitly excluded.
+- Owner-triggered complete export of the local managed attachment store with a checksum-verified manifest; the source store is preserved.
 - Desktop loopback navigation restrictions and server boundaries that remain fail-closed when unconfigured.
 - A disabled-by-default, fixture-only outside-AI advisory boundary with redaction preview, strict limits, provenance/confidence, owner confirmation, no-write audit metadata, deterministic fallback, and no network or credential path.
 
@@ -54,6 +55,7 @@ The program now follows the synchronized Starter definition used by the website 
 - “Sent,” “Paid,” and similar states are manual bookkeeping labels. No email, SMS, invoice PDF delivery, payment link, charge, bank reconciliation, or customer notification occurs.
 - The app is single-device and has no live multi-user synchronization, account provisioning, remote backup, conflict UI, or production authentication flow.
 - CSV import and JSON restore trust the owner to choose synthetic files. They are local workflows, not a production data migration service.
+- Attachment retention is manual. Files are deleted only after explicit owner confirmation; there is no automatic purge. The JSON backup excludes attachment binaries and metadata, so use the separate complete attachment-store export when those files must be retained.
 - The bundled server, billing, sync, QuickBooks, and outside-AI advisory modules are safety boundaries and testable contracts, not enabled services. Their provider adapters and secrets are deliberately unconfigured. The advisory boundary is fixture-only, has a hard disabled switch, performs no network or record writes, and exposes only local redaction/status previews. `/api/health/live` reports process liveness, while `/api/health/ready` and `/api/sync` fail closed until database, issuer, audience, and an injected asymmetric verification boundary are present. No JWKS fetcher or distributed rate-limit enforcement is shipped locally.
 
 ## Remaining production boundaries

@@ -157,6 +157,17 @@ ipcMain.handle('fieldstead:operational-attachment-backup-manifest', async () => 
   try { return { ok: true, manifest: await operationalAttachmentStore().backupManifest() }; }
   catch (error) { return attachmentResult(error); }
 });
+ipcMain.handle('fieldstead:operational-attachment-store-export', async () => {
+  try {
+    const choice = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export complete attachment store',
+      defaultPath: `fieldstead-attachment-store-${new Date().toISOString().slice(0, 10)}`,
+      buttonLabel: 'Export store', properties: ['createDirectory'],
+    });
+    if (choice.canceled || !choice.filePath) return { ok: false, canceled: true };
+    return { ok: true, ...(await operationalAttachmentStore().exportManagedStore(choice.filePath)) };
+  } catch (error) { return attachmentResult(error); }
+});
 ipcMain.handle('fieldstead:setup-get', () => createSetupStore(app.getPath('userData')).load());
 ipcMain.handle('fieldstead:setup-save', (_event, state) => createSetupStore(app.getPath('userData')).save(state));
 ipcMain.handle('fieldstead:app-version', () => app.getVersion());

@@ -68,6 +68,17 @@ function publicMetadata(item) {
   };
 }
 
+async function checksumFile(filename) {
+  const hash = createHash('sha256');
+  const handle = await fs.open(filename, 'r');
+  try {
+    for await (const chunk of handle.readableWebStream()) hash.update(Buffer.from(chunk));
+  } finally {
+    await handle.close();
+  }
+  return `sha256:${hash.digest('hex')}`;
+}
+
 export function createOperationalAttachmentStore(rootDirectory, options = {}) {
   const root = path.resolve(rootDirectory);
   const maxBytes = Number(options.maxBytes) || DEFAULT_MAX_BYTES;
@@ -91,14 +102,7 @@ export function createOperationalAttachmentStore(rootDirectory, options = {}) {
       await fs.mkdir(directory, { recursive: true, mode: 0o700 });
       const storageName = 'content.bin';
       try {
-        const checksumHash = createHash('sha256');
-        const checksumHandle = await fs.open(sourcePath, 'r');
-        try {
-          for await (const chunk of checksumHandle.readableWebStream()) checksumHash.update(Buffer.from(chunk));
-        } finally {
-          await checksumHandle.close();
-        }
-        const checksum = `sha256:${checksumHash.digest('hex')}`;
+        const checksum = await checksumFile(sourcePath);
         await fs.copyFile(sourcePath, path.join(directory, storageName));
         await fs.chmod(path.join(directory, storageName), 0o600);
         const item = {
@@ -173,6 +177,34 @@ export function createOperationalAttachmentStore(rootDirectory, options = {}) {
         warning: attachments.length ? 'Managed attachment content is not included in the JSON backup. Copy the desktop attachment store with the backup.' : 'No managed attachment content exists.',
         attachments,
       };
+    },
+
+    async exportManagedStore(destination, createdAt = new Date().toISOString()) {
+      const target = path.resolve(String(destination));
+      const relative = path.relative(root, target);
+      if (!relative || (!relative.startsWith('..') && !path.isAbsolute(relative))) throw new Error('Attachment backup destination must be outside the managed store.');
+      const attachments = await loadIndex(root);
+      try {
+        await fs.mkdir(target, { recursive: false, mode: 0o700 });
+        const exported = [];
+        for (const item of attachments) {
+          const source = path.join(contentDirectory(root, item.id), item.storageName);
+          if (await checksumFile(source) !== item.checksum) throw new Error(`Attachment checksum verification failed for ${item.id}.`);
+          const directory = path.join(target, 'attachments', item.id);
+          await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+          const destinationPath = path.join(directory, item.filename);
+          await fs.copyFile(source, destinationPath);
+          await fs.chmod(destinationPath, 0o600);
+          if (await checksumFile(destinationPath) !== item.checksum) throw new Error(`Exported attachment checksum verification failed for ${item.id}.`);
+          exported.push(publicMetadata(item));
+        }
+        const manifest = { version: 1, createdAt, attachmentCount: exported.length, contentIncluded: true, verified: true, attachments: exported };
+        await fs.writeFile(path.join(target, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 });
+        return { destination: target, attachmentCount: exported.length, verified: true, manifest };
+      } catch (error) {
+        await fs.rm(target, { recursive: true, force: true });
+        throw error;
+      }
     },
 
     async auditPath() {
