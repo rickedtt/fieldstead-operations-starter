@@ -9,11 +9,16 @@ function json(body: unknown, status: number): Response {
 
 export async function POST(request: Request): Promise<Response> {
   try {
+    if (request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json') return json({ error: 'Content-Type must be application/json.' }, 415);
+    const declaredLength = Number(request.headers.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > 262_144) return json({ error: 'Request body is too large.' }, 413);
     const environment = env as unknown as Env;
     const identity = await authenticateBearer(request.headers.get('authorization'), environment);
     let body: unknown;
     try {
-      body = await request.json();
+      const text = await request.text();
+      if (new TextEncoder().encode(text).byteLength > 262_144) return json({ error: 'Request body is too large.' }, 413);
+      body = JSON.parse(text);
     } catch {
       return json({ error: 'Request body must be valid JSON.' }, 400);
     }

@@ -62,4 +62,14 @@ describe('sync authentication', () => {
       DB: database() as unknown as D1Database, JWT_SECRET: secret,
     }, now)).resolves.toEqual({ user_id: 'user-1', organization_id: 'org-1', role: 'field_crew' });
   });
+
+  it('requires configured issuer/audience and a bounded token lifetime', async () => {
+    const now = 2_000_000_000;
+    const environment = { DB: database() as unknown as D1Database, JWT_SECRET: secret, JWT_ISSUER: 'fieldstead', JWT_AUDIENCE: 'fieldstead-sync', JWT_MAX_LIFETIME_SECONDS: 900 };
+    const valid = { sub: 'user-1', organization_id: 'org-1', iss: 'fieldstead', aud: 'fieldstead-sync', iat: now - 10, exp: now + 60 };
+    await expect(authenticateBearer(`Bearer ${await token({ ...valid, iss: 'other' })}`, environment, now)).rejects.toMatchObject({ status: 401 });
+    await expect(authenticateBearer(`Bearer ${await token({ ...valid, aud: 'other' })}`, environment, now)).rejects.toMatchObject({ status: 401 });
+    await expect(authenticateBearer(`Bearer ${await token({ ...valid, exp: now + 901 })}`, environment, now)).rejects.toMatchObject({ status: 401 });
+    await expect(authenticateBearer(`Bearer ${await token(valid)}`, environment, now)).resolves.toMatchObject({ user_id: 'user-1' });
+  });
 });

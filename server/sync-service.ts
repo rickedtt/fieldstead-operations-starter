@@ -376,6 +376,10 @@ export async function processSyncBatch(
     throw new SyncRequestError(error instanceof Error ? error.message : 'Malformed operation batch.', 400);
   }
 
+  if (batch.operations.length < 1 || batch.operations.length > 100) {
+    throw new SyncRequestError('OperationBatch.operations must contain between 1 and 100 operations.', 400);
+  }
+
   const acceptedOperationIds: string[] = [];
   const rejectedOperations: RejectedOperation[] = [];
   const conflicts: ConflictRecord[] = [];

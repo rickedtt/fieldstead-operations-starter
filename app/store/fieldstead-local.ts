@@ -11,6 +11,7 @@ import {
   type ImportResult,
   type LegacyStorage,
 } from '../../packages/fieldstead-local-store/src/migration';
+import type { OutboxOperation } from '../../packages/fieldstead-domain/src';
 
 export const FIELDSTEAD_DATABASE_NAME =
   'fieldstead-operations-starter-dogfood-v1';
@@ -21,6 +22,7 @@ export type LocalJobsSnapshot = {
   activity: ActivityEvent[];
   loading: boolean;
   error: Error | null;
+  sync: { pending: number; retryable: number; conflicted: number; lastSuccessAt?: string };
 };
 
 type LocalJobsStoreOptions = {
@@ -65,6 +67,7 @@ export class LocalJobsStore {
       activity: [],
       loading: true,
       error: null,
+      sync: { pending: 0, retryable: 0, conflicted: 0 },
     };
   }
 
@@ -80,6 +83,18 @@ export class LocalJobsStore {
     this.listeners.forEach((listener) => listener());
   }
 
+  private async refreshSyncState(): Promise<void> {
+    if (!this.repository) return;
+    const operations = await this.repository.outboxOperations.toArray() as OutboxOperation[];
+    const lastSuccessAt = (await this.repository.metadata.get('sync:last-success-at'))?.value;
+    this.update({ ...this.snapshot, sync: {
+      pending: operations.filter(({ status }) => status === 'pending' || status === 'in-flight').length,
+      retryable: operations.filter(({ status }) => status === 'retryable').length,
+      conflicted: operations.filter(({ status }) => status === 'conflicted').length,
+      lastSuccessAt: typeof lastSuccessAt === 'string' ? lastSuccessAt : undefined,
+    } });
+  }
+
   start(): Promise<void> {
     if (this.observation) return Promise.resolve();
     if (this.starting) return this.starting;
@@ -90,6 +105,7 @@ export class LocalJobsStore {
       try {
         await repository.open();
         await repository.seedJobsIfEmpty(this.fallbackJobs);
+        await this.refreshSyncState();
         this.observation = repository.observeJobs().subscribe({
           next: (jobs) => this.update({ ...this.snapshot, jobs, loading: false, error: null }),
           error: (error) =>
@@ -163,6 +179,7 @@ export class LocalJobsStore {
         occurredAt,
         activityEvent,
       });
+      await this.refreshSyncState();
       this.update({ ...this.snapshot, error: null });
       return updated;
     } catch (error) {
@@ -188,6 +205,7 @@ export class LocalJobsStore {
         occurredAt: this.now(),
         activityEvent,
       });
+      await this.refreshSyncState();
       this.update({ ...this.snapshot, error: null });
       return created;
     } catch (error) {

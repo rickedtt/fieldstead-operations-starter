@@ -157,7 +157,10 @@ export type OutboxOperation = {
   kind: string;
   payload: Record<string, unknown>;
   createdAt: string;
-  status: 'pending';
+  status: 'pending' | 'in-flight' | 'retryable' | 'rejected' | 'accepted' | 'conflicted';
+  attemptCount?: number;
+  lastAttemptAt?: string;
+  lastError?: string;
 };
 
 export const JOB_STATUS_TRANSITIONS = {

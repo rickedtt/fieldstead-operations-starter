@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Customer, Job, ServiceRequest } from '../../fieldstead-domain/src';
 import { createFieldsteadRepository, type FieldsteadRepository } from './index';
+import type { OperationResult } from '../../fieldstead-sync/src';
 
 const databases: FieldsteadRepository[] = [];
 
@@ -38,6 +39,23 @@ afterEach(async () => {
 });
 
 describe('optimistic local mutations', () => {
+  it('reconciles durable outbox lifecycle states and cursor atomically', async () => {
+    const repo = await repository();
+    for (const [id, createdAt] of [['accepted', '2026-09-04T12:00:00.000Z'], ['retry', '2026-09-04T12:01:00.000Z'], ['conflict', '2026-09-04T12:02:00.000Z']] as const) {
+      await repo.outboxOperations.add({ id, entityType: 'job', entityId: 'HP-2000', kind: 'job.update', payload: {}, createdAt, status: 'pending' });
+    }
+    await repo.markInFlight(['accepted', 'retry', 'conflict']);
+    const result: OperationResult = { protocolVersion: 1, batchId: 'batch-1', cursor: { version: 1, position: '3' }, acceptedOperationIds: ['accepted'], rejectedOperations: [
+      { operationId: 'retry', code: 'server_error', message: 'later', retryable: true },
+      { operationId: 'conflict', code: 'conflict', message: 'changed', retryable: false },
+    ], conflicts: [{ operationId: 'conflict', entityType: 'job', entityId: 'HP-2000', reason: 'concurrent_update', clientVersion: '1', serverVersion: '2', message: 'changed' }] };
+    await repo.applyResult(result);
+    await expect(repo.getCursor()).resolves.toEqual({ version: 1, position: '3' });
+    await expect(repo.outboxOperations.get('accepted')).resolves.toMatchObject({ status: 'accepted' });
+    await expect(repo.outboxOperations.get('retry')).resolves.toMatchObject({ status: 'retryable', lastError: 'later' });
+    await expect(repo.outboxOperations.get('conflict')).resolves.toMatchObject({ status: 'conflicted', lastError: 'changed' });
+  });
+
   it('makes the mutation locally readable and creates its outbox record', async () => {
     const repo = await repository();
 

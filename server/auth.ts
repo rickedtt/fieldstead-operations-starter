@@ -55,7 +55,7 @@ export async function authenticateBearer(
   );
   if (!valid) throw new AuthError('Invalid bearer token signature.', 401);
   const claims = jsonPart(encodedClaims);
-  const { sub, organization_id: organizationId, iat, exp } = claims;
+  const { sub, organization_id: organizationId, iat, exp, iss, aud } = claims;
   if (
     typeof sub !== 'string' || !sub || typeof organizationId !== 'string' || !organizationId ||
     typeof iat !== 'number' || !Number.isInteger(iat) ||
@@ -63,6 +63,10 @@ export async function authenticateBearer(
   ) throw new AuthError('Invalid bearer token claims.', 401);
   if (exp <= now) throw new AuthError('Bearer token has expired.', 401);
   if (iat > now) throw new AuthError('Bearer token was issued in the future.', 401);
+  if (environment.JWT_ISSUER && iss !== environment.JWT_ISSUER) throw new AuthError('Invalid bearer token issuer.', 401);
+  const audiences = Array.isArray(aud) ? aud : [aud];
+  if (environment.JWT_AUDIENCE && !audiences.includes(environment.JWT_AUDIENCE)) throw new AuthError('Invalid bearer token audience.', 401);
+  if (exp - iat > (environment.JWT_MAX_LIFETIME_SECONDS ?? 900)) throw new AuthError('Bearer token lifetime is too long.', 401);
 
   const identity = await findActiveIdentity(environment.DB, sub, organizationId);
   if (!identity) throw new AuthError('The authenticated user is not active.', 403);

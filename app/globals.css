@@ -13,6 +13,7 @@
 .local-note.local-note-error>span{color:#e7a18e}
 .mobile-local-status{margin:7px 0 0;color:#718078;font-size:10px;font-weight:700}
 .mobile-local-status.failed{color:#9a4d3f}
+.sync-status{padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--muted);font-size:11px;font-weight:800;white-space:nowrap}.sync-status-conflicted{border-color:#b65b4c;color:#b65b4c}.sync-status-retry{border-color:#bb8734;color:#a56f1d}.sync-status-syncing{border-color:var(--green);color:var(--green)}
 .migration-action{align-self:center;padding:5px 2px;border:0;border-bottom:1px solid #9da8a1;background:transparent;color:#52645b;font-size:10px;font-weight:700;white-space:nowrap}
 .migration-action:hover{color:var(--green);border-color:var(--green)}
 

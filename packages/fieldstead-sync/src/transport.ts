@@ -22,13 +22,19 @@ export type HttpSyncTransportOptions = {
   endpoint: string;
   getAccessToken: () => string | undefined | Promise<string | undefined>;
   fetcher?: typeof fetch;
+  timeoutMs?: number;
 };
+
+export class SyncTransportError extends Error {
+  constructor(message: string, readonly code: 'timeout' | 'network' | 'http', readonly retryable: boolean, readonly status?: number) { super(message); this.name = 'SyncTransportError'; }
+}
 
 /** Production client transport for the authenticated Fieldstead sync route. */
 export class HttpSyncTransport implements SyncTransport {
   private readonly fetcher: typeof fetch;
 
   constructor(private readonly options: HttpSyncTransportOptions) {
+    if (new URL(options.endpoint).protocol !== 'https:') throw new TypeError('Fieldstead sync requires an HTTPS endpoint.');
     this.fetcher = options.fetcher ?? fetch;
   }
 
@@ -37,24 +43,22 @@ export class HttpSyncTransport implements SyncTransport {
     const token = await this.options.getAccessToken();
     if (!token) throw new Error("Fieldstead sync requires an access token.");
 
-    const response = await this.fetcher(this.options.endpoint, {
-      method: "POST",
-      headers: {
-        authorization: "Bearer " + token,
-        "content-type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify(batch),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 15_000);
+    let response: Response;
+    try {
+      response = await this.fetcher(this.options.endpoint, { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(batch), signal: controller.signal, cache: 'no-store' });
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) throw new SyncTransportError('Fieldstead sync timed out.', 'timeout', true);
+      throw new SyncTransportError(error instanceof Error ? error.message : 'Fieldstead sync network failure.', 'network', true);
+    } finally { clearTimeout(timeout); }
     const body: unknown = await response.json().catch(() => undefined);
     if (!response.ok) {
       const message =
         typeof body === "object" && body !== null && "error" in body && typeof body.error === "string"
           ? body.error
           : "Fieldstead sync failed with HTTP " + response.status + ".";
-      const error = new Error(message);
-      Object.assign(error, { status: response.status, retryable: response.status >= 500 });
-      throw error;
+      throw new SyncTransportError(message, 'http', response.status === 408 || response.status === 429 || response.status >= 500, response.status);
     }
     return parseOperationResult(body);
   }

@@ -39,6 +39,7 @@ import {
   type RecurringServiceOccurrence,
   type ServiceRequest,
 } from '../../fieldstead-domain/src';
+import type { OperationResult, SyncCursor, SyncOperation, SyncOutbox } from '../../fieldstead-sync/src';
 
 export type StoreMetadata = {
   key: string;
@@ -142,7 +143,7 @@ function sameRecord(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-export class FieldsteadRepository extends Dexie {
+export class FieldsteadRepository extends Dexie implements SyncOutbox {
   jobs!: EntityTable<Job, 'id'>;
   assignments!: EntityTable<JobAssignment, 'id'>;
   activityEvents!: EntityTable<ActivityEvent, 'id'>;
@@ -261,6 +262,16 @@ export class FieldsteadRepository extends Dexie {
         await transaction.table('pricebookItems').put(versioned);
         await transaction.table('pricebookItemVersions').put(versioned);
       }
+    });
+    this.version(11).stores({
+      jobs: 'id, customerId, serviceRequestId, status, scheduledFor, updatedAt', assignments: 'id, jobId, assigneeId, assignedAt, unassignedAt',
+      activityEvents: 'id, jobId, customerId, at', outboxOperations: 'id, status, createdAt, [status+createdAt], [entityType+entityId]', metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt', estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
+      fieldEvents: 'id, &operationId, jobId, actorId, occurredAt, syncState', invoices: 'id, &jobId, customerId, status, issuedAt, dueAt', invoiceLineItems: 'id, invoiceId, [invoiceId+position]', paymentEntries: 'id, invoiceId, kind, occurredAt, correctsEntryId',
+      pricebookItemVersions: '[id+version], id, version, active, audit.updatedAt', recurringServiceAgreements: 'id, customerId, status, audit.updatedAt', recurringServiceOccurrences: 'id, agreementId, status, &provenanceKey, generatedEntityId',
+    }).upgrade(async (transaction) => {
+      await transaction.table<OutboxOperation>('outboxOperations').toCollection().modify((operation) => { operation.status ||= 'pending'; operation.attemptCount ??= 0; });
     });
   }
 
@@ -825,8 +836,30 @@ export class FieldsteadRepository extends Dexie {
     return liveQuery(() => this.listJobs());
   }
 
-  listPendingOperations(): Promise<OutboxOperation[]> {
-    return this.outboxOperations.where('status').equals('pending').sortBy('createdAt');
+  async listPendingOperations(limit = 100): Promise<SyncOperation[]> {
+    const operations = await this.outboxOperations.where('status').anyOf('pending', 'retryable').toArray();
+    return operations.sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)).slice(0, Math.max(1, Math.min(limit, 100))).map(({ id, entityType, entityId, kind, payload, createdAt }) => ({ id, entityType, entityId, kind, payload: payload as SyncOperation['payload'], createdAt }));
+  }
+
+  async getCursor(): Promise<SyncCursor | undefined> { return (await this.metadata.get('sync:cursor'))?.value as SyncCursor | undefined; }
+
+  async markInFlight(operationIds: string[]): Promise<void> {
+    const attemptedAt = new Date().toISOString();
+    await this.transaction('rw', this.outboxOperations, async () => { for (const id of operationIds) { const operation = await this.outboxOperations.get(id); if (operation) await this.outboxOperations.put({ ...operation, status: 'in-flight', attemptCount: (operation.attemptCount ?? 0) + 1, lastAttemptAt: attemptedAt, lastError: undefined }); } });
+  }
+
+  async markRetryable(operationIds: string[], message?: string): Promise<void> {
+    await this.transaction('rw', this.outboxOperations, async () => { for (const id of operationIds) { const operation = await this.outboxOperations.get(id); if (operation?.status === 'in-flight') await this.outboxOperations.put({ ...operation, status: 'retryable', lastError: message }); } });
+  }
+
+  async applyResult(result: OperationResult): Promise<void> {
+    const now = new Date().toISOString();
+    await this.transaction('rw', [this.outboxOperations, this.metadata, this.fieldEvents], async () => {
+      for (const id of result.acceptedOperationIds) { const operation = await this.outboxOperations.get(id); if (operation) { await this.outboxOperations.put({ ...operation, status: 'accepted', lastError: undefined }); if (operation.entityType === 'fieldEvent') { const event = await this.fieldEvents.get(operation.entityId); if (event) await this.fieldEvents.put({ ...event, syncState: 'synced', conflictReason: undefined }); } } }
+      for (const rejection of result.rejectedOperations) { const operation = await this.outboxOperations.get(rejection.operationId); if (!operation) continue; const status = rejection.retryable ? 'retryable' : rejection.code === 'conflict' ? 'conflicted' : 'rejected'; await this.outboxOperations.put({ ...operation, status, lastError: rejection.message }); if (status === 'conflicted' && operation.entityType === 'fieldEvent') { const event = await this.fieldEvents.get(operation.entityId); if (event) await this.fieldEvents.put({ ...event, syncState: 'conflicted', conflictReason: rejection.message }); } }
+      await this.metadata.put({ key: 'sync:cursor', value: result.cursor, updatedAt: now });
+      await this.metadata.put({ key: 'sync:last-success-at', value: now, updatedAt: now });
+    });
   }
 
   async seedJobsIfEmpty(jobs: Job[]): Promise<boolean> {

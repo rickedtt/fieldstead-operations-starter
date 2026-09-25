@@ -29,6 +29,7 @@ import { EstimateEditor, type EstimateEditorLine } from './estimate-editor';
 import { buildEmailIntakeConversion, type EmailIntakeApproval, type EmailIntakeDraft } from '../lib/email-intake-conversion';
 import type { Customer as DurableCustomer } from '../packages/fieldstead-domain/src';
 import { buildCalendarDays, listUnscheduledJobs, type CalendarMode } from './dispatch-calendar';
+import { deriveSyncStatus, syncStatusLabel } from './sync-status';
 
 type View = 'Overview' | 'Dispatch' | 'Assigned Jobs' | 'Jobs' | 'Customers' | 'Activity' | 'Client Delivery' | 'Email' | 'Finance' | 'Settings';
 type Theme = 'dark' | 'light';
@@ -161,6 +162,7 @@ export default function Home() {
   const [toast, setToast] = useState('');
   const [setupState, setSetupState] = useState<SetupState | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const syncStatus = { connected: false, syncing: false, ...localJobs.sync };
 
   useEffect(() => {
     let cancelled = false;
@@ -299,7 +301,7 @@ export default function Home() {
         <header className="topbar">
           <button className="mobile-brand" aria-label="Go to overview" onClick={() => setView('Overview')}><Image src="/favicon.svg" width={32} height={32} alt="Fieldstead Systems"/></button>
           <div><p className="eyebrow">FIELDSTEAD SYSTEMS</p><h1>{view === 'Overview' ? 'Owner operations, at a glance.' : view}</h1></div>
-          {view !== 'Settings' && <div className="header-actions"><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></div>}
+          <div className="header-actions"><span className={`sync-status sync-status-${deriveSyncStatus(syncStatus)}`} role="status">{syncStatusLabel(syncStatus)}</span>{view !== 'Settings' && <><button className="secondary desktop-only" onClick={() => setModal('customer')}>New customer</button><button className="primary" onClick={() => setModal('job')}>＋ New job</button></>}</div>
         </header>
 
         <div className="dogfood-banner" role="note"><span>Starter workflow: office-first visibility for customers, jobs, schedules, follow-up, and payment status. No customer messages, invoices, or payments are sent.</span></div>

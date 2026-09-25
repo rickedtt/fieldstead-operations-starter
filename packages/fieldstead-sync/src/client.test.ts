@@ -23,7 +23,9 @@ class TestOutbox implements SyncOutbox {
   ];
 
   async getCursor() { return this.cursor; }
-  async listPendingOperations() { return structuredClone(this.operations); }
+  async listPendingOperations(limit = 100) { return structuredClone(this.operations.slice(0, limit)); }
+  async markInFlight(operationIds: string[]) { this.outcomes.set(`in-flight:${operationIds.join(',')}`, 'accepted'); }
+  async markRetryable(operationIds: string[]) { this.outcomes.set(`retry:${operationIds.join(',')}`, 'accepted'); }
   async applyResult(result: OperationResult) {
     this.cursor = result.cursor;
     for (const id of result.acceptedOperationIds) {
@@ -106,6 +108,26 @@ describe('SyncClient', () => {
     expect(duplicate).toBe(first);
     await Promise.all([first, duplicate]);
     expect(submissions).toBe(1);
+  });
+
+  it('submits one deterministic bounded batch per drain', async () => {
+    const outbox = new TestOutbox();
+    outbox.operations.push({ ...outbox.operations[0], id: 'operation-2', createdAt: '2026-09-04T12:01:00.000Z' });
+    const submitted: string[] = [];
+    const client = new SyncClient({ clientId: 'client-1', createBatchId: () => 'batch-bounded', outbox, batchSize: 1,
+      transport: new InMemorySyncTransport((operation) => { submitted.push(operation.id); return { status: 'accepted' }; }) });
+    await client.syncPending();
+    expect(submitted).toEqual(['operation-1']);
+    expect(outbox.operations.map(({ id }) => id)).toEqual(['operation-2']);
+  });
+
+  it('returns in-flight operations to retryable when transport fails', async () => {
+    const outbox = new TestOutbox();
+    const client = new SyncClient({ clientId: 'client-1', createBatchId: () => 'batch-failed', outbox,
+      transport: { submit: async () => { throw Object.assign(new Error('offline'), { retryable: true }); } } });
+    await expect(client.syncPending()).rejects.toThrow('offline');
+    expect(outbox.outcomes.has('in-flight:operation-1')).toBe(true);
+    expect(outbox.outcomes.has('retry:operation-1')).toBe(true);
   });
 
   it('records a terminal conflict and removes it from the pending queue', async () => {

@@ -46,6 +46,13 @@ describe('D1 sync service', () => {
     expect(db.mutations).toHaveLength(0);
   });
 
+  it('rejects empty and oversized batches before database work', async () => {
+    const db = database();
+    await expect(processSyncBatch(db as unknown as D1Database, dispatcher, { ...batch(), operations: [] })).rejects.toMatchObject({ status: 400 });
+    await expect(processSyncBatch(db as unknown as D1Database, dispatcher, { ...batch(), operations: Array.from({ length: 101 }, (_, index) => operation({ id: `op-${index}` })) })).rejects.toMatchObject({ status: 400 });
+    expect(db.mutations).toHaveLength(0);
+  });
+
   it('scopes reads and updates to the authenticated tenant', async () => {
     const db = database();
     const result = await processSyncBatch(db as unknown as D1Database, dispatcher, batch());
