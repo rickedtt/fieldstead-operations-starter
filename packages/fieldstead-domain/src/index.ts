@@ -142,10 +142,14 @@ export type OperationalAttachment = {
 export type PricebookItem = { id: string; name: string; description?: string; unit: string; unitPriceCents: number; active: boolean; audit: AuditMetadata };
 export type Estimate = { id: string; jobId: string; status: 'Draft'; subtotalCents: number; audit: AuditMetadata };
 export type EstimateLineItem = { id: string; estimateId: string; position: number; description: string; quantity: number; unit: string; unitPriceCents: number; lineTotalCents: number; pricebookItemId?: string; pricebookItemName?: string };
+export type Invoice = { id: string; jobId: string; customerId: string; estimateId?: string; status: 'Draft' | 'Sent' | 'Paid' | 'Overdue'; subtotalCents: number; issuedAt: string; dueAt?: string; audit: AuditMetadata };
+export type InvoiceLineItem = { id: string; invoiceId: string; position: number; description: string; quantity: number; unit: string; unitPriceCents: number; lineTotalCents: number; sourceEstimateLineItemId?: string; pricebookItemId?: string; pricebookItemName?: string };
+export type PaymentEntryKind = 'payment' | 'void' | 'refund';
+export type PaymentEntry = { id: string; invoiceId: string; kind: PaymentEntryKind; amountCents: number; occurredAt: string; actorId: string; correctsEntryId?: string; note?: string };
 
 export type OutboxOperation = {
   id: string;
-  entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest' | 'estimate' | 'pricebookItem' | 'fieldEvent';
+  entityType: 'job' | 'jobAssignment' | 'activityEvent' | 'customer' | 'serviceRequest' | 'estimate' | 'pricebookItem' | 'fieldEvent' | 'invoice' | 'paymentEntry';
   entityId: string;
   kind: string;
   payload: Record<string, unknown>;
@@ -340,6 +344,30 @@ export function parseEstimateLineItem(value: unknown): EstimateLineItem {
   return { id: stringField(line, 'id', 'EstimateLineItem'), estimateId: stringField(line, 'estimateId', 'EstimateLineItem'), position: integerField(line, 'position', 'EstimateLineItem'), description: stringField(line, 'description', 'EstimateLineItem'), quantity, unit: stringField(line, 'unit', 'EstimateLineItem'), unitPriceCents, lineTotalCents, pricebookItemId: optionalStringField(line, 'pricebookItemId', 'EstimateLineItem'), pricebookItemName: optionalStringField(line, 'pricebookItemName', 'EstimateLineItem') };
 }
 
+export function parseInvoice(value: unknown): Invoice {
+  const invoice = record(value, 'Invoice');
+  return { id: stringField(invoice, 'id', 'Invoice'), jobId: stringField(invoice, 'jobId', 'Invoice'), customerId: stringField(invoice, 'customerId', 'Invoice'), estimateId: optionalStringField(invoice, 'estimateId', 'Invoice'), status: enumField(invoice, 'status', 'Invoice', ['Draft', 'Sent', 'Paid', 'Overdue'] as const), subtotalCents: integerField(invoice, 'subtotalCents', 'Invoice'), issuedAt: stringField(invoice, 'issuedAt', 'Invoice'), dueAt: optionalStringField(invoice, 'dueAt', 'Invoice'), audit: parseAuditMetadata(invoice.audit) };
+}
+
+export function parseInvoiceLineItem(value: unknown): InvoiceLineItem {
+  const line = record(value, 'InvoiceLineItem');
+  const quantity = numberField(line, 'quantity', 'InvoiceLineItem');
+  if (quantity <= 0) throw new TypeError('InvoiceLineItem.quantity must be greater than zero');
+  const unitPriceCents = integerField(line, 'unitPriceCents', 'InvoiceLineItem');
+  const lineTotalCents = integerField(line, 'lineTotalCents', 'InvoiceLineItem');
+  if (!Number.isSafeInteger(quantity * unitPriceCents) || lineTotalCents !== quantity * unitPriceCents) throw new TypeError('InvoiceLineItem.lineTotalCents must equal quantity times unitPriceCents');
+  return { id: stringField(line, 'id', 'InvoiceLineItem'), invoiceId: stringField(line, 'invoiceId', 'InvoiceLineItem'), position: integerField(line, 'position', 'InvoiceLineItem'), description: stringField(line, 'description', 'InvoiceLineItem'), quantity, unit: stringField(line, 'unit', 'InvoiceLineItem'), unitPriceCents, lineTotalCents, sourceEstimateLineItemId: optionalStringField(line, 'sourceEstimateLineItemId', 'InvoiceLineItem'), pricebookItemId: optionalStringField(line, 'pricebookItemId', 'InvoiceLineItem'), pricebookItemName: optionalStringField(line, 'pricebookItemName', 'InvoiceLineItem') };
+}
+
+export function parsePaymentEntry(value: unknown): PaymentEntry {
+  const entry = record(value, 'PaymentEntry');
+  const kind = enumField(entry, 'kind', 'PaymentEntry', ['payment', 'void', 'refund'] as const);
+  const correctsEntryId = optionalStringField(entry, 'correctsEntryId', 'PaymentEntry');
+  if (kind !== 'payment' && !correctsEntryId) throw new TypeError('PaymentEntry.correctsEntryId is required for corrections');
+  if (kind === 'payment' && correctsEntryId) throw new TypeError('PaymentEntry.correctsEntryId is not allowed for payments');
+  return { id: stringField(entry, 'id', 'PaymentEntry'), invoiceId: stringField(entry, 'invoiceId', 'PaymentEntry'), kind, amountCents: integerField(entry, 'amountCents', 'PaymentEntry', 1), occurredAt: stringField(entry, 'occurredAt', 'PaymentEntry'), actorId: stringField(entry, 'actorId', 'PaymentEntry'), correctsEntryId, note: optionalStringField(entry, 'note', 'PaymentEntry') };
+}
+
 export function parseJob(value: unknown): Job {
   const job = record(value, 'Job');
   return {
@@ -415,6 +443,8 @@ export function parseOutboxOperation(value: unknown): OutboxOperation {
       'estimate',
       'pricebookItem',
       'fieldEvent',
+      'invoice',
+      'paymentEntry',
     ] as const),
     entityId: stringField(operation, 'entityId', 'OutboxOperation'),
     kind: stringField(operation, 'kind', 'OutboxOperation'),

@@ -6,9 +6,12 @@ import {
   parseEstimate,
   parseEstimateLineItem,
   parseFieldEvent,
+  parseInvoice,
+  parseInvoiceLineItem,
   parseJob,
   parseOperationalAttachment,
   parseOutboxOperation,
+  parsePaymentEntry,
   parsePricebookItem,
   parseServiceRequest,
   schedulesOverlap,
@@ -21,10 +24,13 @@ import {
   type FieldEvent,
   type FieldEventKind,
   type FieldJobState,
+  type Invoice,
+  type InvoiceLineItem,
   type Job,
   type JobAssignment,
   type OutboxOperation,
   type OperationalAttachment,
+  type PaymentEntry,
   type PricebookItem,
   type ServiceRequest,
 } from '../../fieldstead-domain/src';
@@ -106,6 +112,8 @@ export type AttachmentDelete = {
 };
 
 export type EstimateSave = { operationId: string; actorId: string; actorRole: 'owner_admin' | 'dispatcher' | 'field_crew'; occurredAt: string; auditEventId: string; estimate: Estimate; lines: EstimateLineItem[] };
+export type InvoiceCreation = { jobId: string; invoiceId: string; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string; dueAt?: string };
+export type PaymentEntryPost = { invoiceId: string; entryId: string; kind: PaymentEntry['kind']; amountCents: number; operationId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string; correctsEntryId?: string; note?: string };
 
 export type ScheduleJobInput = {
   jobId: string; scheduledFor: string; durationHours: number; assigneeId?: string; assigneeName?: string;
@@ -140,6 +148,9 @@ export class FieldsteadRepository extends Dexie {
   estimates!: EntityTable<Estimate, 'id'>;
   estimateLineItems!: EntityTable<EstimateLineItem, 'id'>;
   fieldEvents!: EntityTable<FieldEvent, 'id'>;
+  invoices!: EntityTable<Invoice, 'id'>;
+  invoiceLineItems!: EntityTable<InvoiceLineItem, 'id'>;
+  paymentEntries!: EntityTable<PaymentEntry, 'id'>;
 
   constructor(databaseName = 'fieldstead') {
     super(databaseName);
@@ -218,6 +229,13 @@ export class FieldsteadRepository extends Dexie {
       customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
       attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt', estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
       fieldEvents: 'id, &operationId, jobId, actorId, occurredAt, syncState',
+    });
+    this.version(9).stores({
+      jobs: 'id, customerId, serviceRequestId, status, scheduledFor, updatedAt', assignments: 'id, jobId, assigneeId, assignedAt, unassignedAt',
+      activityEvents: 'id, jobId, customerId, at', outboxOperations: 'id, status, createdAt, [entityType+entityId]', metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]',
+      attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt', estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
+      fieldEvents: 'id, &operationId, jobId, actorId, occurredAt, syncState', invoices: 'id, &jobId, customerId, status, issuedAt, dueAt', invoiceLineItems: 'id, invoiceId, [invoiceId+position]', paymentEntries: 'id, invoiceId, kind, occurredAt, correctsEntryId',
     });
   }
 
@@ -395,6 +413,95 @@ export class FieldsteadRepository extends Dexie {
       await this.outboxOperations.add(operation);
       await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt });
       return { replayed: false, estimate, lines };
+    });
+  }
+
+  async getInvoiceForJob(jobId: string): Promise<{ invoice: Invoice; lines: InvoiceLineItem[] } | undefined> {
+    const invoice = await this.invoices.where('jobId').equals(jobId).first();
+    if (!invoice) return undefined;
+    return { invoice, lines: await this.invoiceLineItems.where('invoiceId').equals(invoice.id).sortBy('position') };
+  }
+
+  async getInvoiceLedger(invoiceId: string): Promise<{ invoice: Invoice; lines: InvoiceLineItem[]; entries: PaymentEntry[]; paidCents: number; balanceCents: number }> {
+    const invoice = await this.invoices.get(invoiceId);
+    if (!invoice) throw new Error(`Invoice ${invoiceId} was not found`);
+    const lines = await this.invoiceLineItems.where('invoiceId').equals(invoiceId).sortBy('position');
+    const entries = (await this.paymentEntries.where('invoiceId').equals(invoiceId).toArray()).sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.id.localeCompare(right.id));
+    const paidCents = entries.reduce((sum, entry) => sum + (entry.kind === 'payment' ? entry.amountCents : -entry.amountCents), 0);
+    return { invoice, lines, entries, paidCents, balanceCents: invoice.subtotalCents - paidCents };
+  }
+
+  async createInvoiceFromJob(input: InvoiceCreation): Promise<{ replayed: boolean; invoice: Invoice; lines: InvoiceLineItem[] }> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to create an invoice');
+    const fingerprint = JSON.stringify(input);
+    const key = `invoice-create:${input.operationId}`;
+    return this.transaction('rw', [this.jobs, this.estimates, this.estimateLineItems, this.invoices, this.invoiceLineItems, this.activityEvents, this.outboxOperations, this.metadata], async () => {
+      const prior = await this.metadata.get(key);
+      if (prior) {
+        if (prior.value !== fingerprint) throw new Error('Invoice idempotency key reused with different content');
+        const saved = await this.getInvoiceForJob(input.jobId);
+        if (!saved || saved.invoice.id !== input.invoiceId) throw new Error('Invoice replay is incomplete');
+        return { replayed: true, ...saved };
+      }
+      const job = await this.jobs.get(input.jobId);
+      if (!job) throw new Error(`Job ${input.jobId} was not found`);
+      if (await this.invoices.where('jobId').equals(job.id).first()) throw new Error('Job already has an invoice');
+      const estimate = await this.getEstimateForJob(job.id);
+      const sourceLines = estimate?.lines || [];
+      const subtotalCents = estimate?.estimate.subtotalCents ?? Math.round((job.quoteAmount || 0) * 100);
+      if (!Number.isSafeInteger(subtotalCents) || subtotalCents < 0) throw new Error('Invoice subtotal must be valid integer cents');
+      const invoice = parseInvoice({ id: input.invoiceId, jobId: job.id, customerId: job.customerId, estimateId: estimate?.estimate.id, status: 'Draft', subtotalCents, issuedAt: input.occurredAt, dueAt: input.dueAt, audit: { createdAt: input.occurredAt, createdBy: input.actorId, updatedAt: input.occurredAt, updatedBy: input.actorId } });
+      const lines = sourceLines.map((line) => parseInvoiceLineItem({ id: `${input.invoiceId}:${line.id}`, invoiceId: input.invoiceId, position: line.position, description: line.description, quantity: line.quantity, unit: line.unit, unitPriceCents: line.unitPriceCents, lineTotalCents: line.lineTotalCents, sourceEstimateLineItemId: line.id, pricebookItemId: line.pricebookItemId, pricebookItemName: line.pricebookItemName }));
+      if (lines.reduce((sum, line) => sum + line.lineTotalCents, 0) !== subtotalCents && lines.length) throw new Error('Invoice subtotal does not match its lines');
+      const event = parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, jobId: job.id, customerId: job.customerId, actor: input.actorId, action: 'Invoice created', detail: `${lines.length} line item(s), ${(subtotalCents / 100).toFixed(2)} subtotal. Draft only; nothing sent.` });
+      const operation = parseOutboxOperation({ id: input.operationId, entityType: 'invoice', entityId: invoice.id, kind: 'invoice.create', payload: { invoice, lines }, createdAt: input.occurredAt, status: 'pending' });
+      await this.invoices.add(invoice);
+      if (lines.length) await this.invoiceLineItems.bulkAdd(lines);
+      await this.jobs.put(parseJob({ ...job, invoiceStatus: 'Draft', invoiceAmount: subtotalCents / 100, updatedAt: input.occurredAt }));
+      await this.activityEvents.add(event);
+      await this.outboxOperations.add(operation);
+      await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt });
+      return { replayed: false, invoice, lines };
+    });
+  }
+
+  async postPaymentEntry(input: PaymentEntryPost): Promise<{ replayed: boolean; entry: PaymentEntry; paidCents: number; balanceCents: number }> {
+    if (input.actorRole !== 'owner_admin') throw new Error('Owner approval is required to post a payment entry');
+    const fingerprint = JSON.stringify(input);
+    const key = `payment-entry:${input.operationId}`;
+    return this.transaction('rw', [this.jobs, this.invoices, this.invoiceLineItems, this.paymentEntries, this.activityEvents, this.outboxOperations, this.metadata], async () => {
+      const prior = await this.metadata.get(key);
+      if (prior) {
+        if (prior.value !== fingerprint) throw new Error('Payment idempotency key reused with different content');
+        const entry = await this.paymentEntries.get(input.entryId);
+        if (!entry) throw new Error('Payment replay is incomplete');
+        const ledger = await this.getInvoiceLedger(input.invoiceId);
+        return { replayed: true, entry, paidCents: ledger.paidCents, balanceCents: ledger.balanceCents };
+      }
+      const ledger = await this.getInvoiceLedger(input.invoiceId);
+      if (input.kind === 'payment' && input.amountCents > ledger.balanceCents) throw new Error('Payment exceeds collectible balance');
+      if (input.kind !== 'payment') {
+        const corrected = ledger.entries.find((entry) => entry.id === input.correctsEntryId && entry.kind === 'payment');
+        if (!corrected) throw new Error('Correction must reference a payment on this invoice');
+        const correctedAmount = ledger.entries.filter((entry) => entry.correctsEntryId === corrected.id).reduce((sum, entry) => sum + entry.amountCents, 0);
+        if (input.amountCents > corrected.amountCents - correctedAmount) throw new Error('Correction exceeds the uncorrected payment amount');
+      }
+      const entry = parsePaymentEntry({ id: input.entryId, invoiceId: input.invoiceId, kind: input.kind, amountCents: input.amountCents, occurredAt: input.occurredAt, actorId: input.actorId, correctsEntryId: input.correctsEntryId, note: input.note });
+      const nextPaidCents = ledger.paidCents + (entry.kind === 'payment' ? entry.amountCents : -entry.amountCents);
+      const balanceCents = ledger.invoice.subtotalCents - nextPaidCents;
+      const status: Invoice['status'] = balanceCents === 0 ? 'Paid' : ledger.invoice.status === 'Paid' ? 'Sent' : ledger.invoice.status;
+      const invoice = parseInvoice({ ...ledger.invoice, status, audit: { ...ledger.invoice.audit, updatedAt: input.occurredAt, updatedBy: input.actorId } });
+      const job = await this.jobs.get(invoice.jobId);
+      if (!job) throw new Error(`Job ${invoice.jobId} was not found`);
+      const event = parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, jobId: invoice.jobId, customerId: invoice.customerId, actor: input.actorId, action: entry.kind === 'payment' ? 'Payment posted' : `Payment ${entry.kind} posted`, detail: `${(entry.amountCents / 100).toFixed(2)} ${entry.kind} entry recorded locally.` });
+      const operation = parseOutboxOperation({ id: input.operationId, entityType: 'paymentEntry', entityId: entry.id, kind: `paymentEntry.${entry.kind}`, payload: { entry }, createdAt: input.occurredAt, status: 'pending' });
+      await this.paymentEntries.add(entry);
+      await this.invoices.put(invoice);
+      await this.jobs.put(parseJob({ ...job, invoiceStatus: status, invoiceAmount: invoice.subtotalCents / 100, updatedAt: input.occurredAt }));
+      await this.activityEvents.add(event);
+      await this.outboxOperations.add(operation);
+      await this.metadata.add({ key, value: fingerprint, updatedAt: input.occurredAt });
+      return { replayed: false, entry, paidCents: nextPaidCents, balanceCents };
     });
   }
 

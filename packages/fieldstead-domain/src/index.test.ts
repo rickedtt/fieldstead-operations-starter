@@ -5,8 +5,11 @@ import {
   parseCustomer,
   parseEstimate,
   parseEstimateLineItem,
+  parseInvoice,
+  parseInvoiceLineItem,
   parseJob,
   parseOutboxOperation,
+  parsePaymentEntry,
   parsePricebookItem,
   parseServiceRequest,
   scheduleEnd,
@@ -120,5 +123,21 @@ describe('pricebook and estimate records', () => {
   it('rejects fractional cents and inconsistent line totals', () => {
     expect(() => parsePricebookItem({ id: 'pb-1', name: 'Gutter cleaning', unit: 'visit', unitPriceCents: 12.5, active: true, audit })).toThrow(/integer/);
     expect(() => parseEstimateLineItem({ id: 'line-1', estimateId: 'est-1', position: 0, description: 'Gutter cleaning', quantity: 2, unit: 'visit', unitPriceCents: 12550, lineTotalCents: 1 })).toThrow(/lineTotalCents/);
+  });
+});
+
+describe('invoice and payment ledger records', () => {
+  const audit = { createdAt: '2026-09-25T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-25T12:00:00.000Z', updatedBy: 'owner-1' };
+
+  it('strictly parses integer-cent invoice snapshots and append-only payment entries', () => {
+    expect(parseInvoice({ id: 'invoice-1', jobId: 'HP-2000', customerId: 'cus-1', status: 'Draft', subtotalCents: 25100, issuedAt: audit.createdAt, audit })).toMatchObject({ subtotalCents: 25100 });
+    expect(parseInvoiceLineItem({ id: 'invoice-line-1', invoiceId: 'invoice-1', position: 0, description: 'Gutter cleaning', quantity: 2, unit: 'visit', unitPriceCents: 12550, lineTotalCents: 25100 })).toMatchObject({ lineTotalCents: 25100 });
+    expect(parsePaymentEntry({ id: 'payment-1', invoiceId: 'invoice-1', kind: 'payment', amountCents: 10000, occurredAt: '2026-09-25T13:00:00.000Z', actorId: 'owner-1' })).toMatchObject({ kind: 'payment', amountCents: 10000 });
+  });
+
+  it('rejects fractional cents, inconsistent totals, and invalid correction references', () => {
+    expect(() => parseInvoice({ id: 'invoice-1', jobId: 'HP-2000', customerId: 'cus-1', status: 'Draft', subtotalCents: 12.5, issuedAt: audit.createdAt, audit })).toThrow(/integer/);
+    expect(() => parseInvoiceLineItem({ id: 'line-1', invoiceId: 'invoice-1', position: 0, description: 'Labor', quantity: 2, unit: 'hour', unitPriceCents: 100, lineTotalCents: 1 })).toThrow(/lineTotalCents/);
+    expect(() => parsePaymentEntry({ id: 'void-1', invoiceId: 'invoice-1', kind: 'void', amountCents: 100, occurredAt: audit.createdAt, actorId: 'owner-1' })).toThrow(/correctsEntryId/);
   });
 });

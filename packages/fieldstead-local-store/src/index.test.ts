@@ -136,6 +136,41 @@ function sampleServiceRequest(overrides: Partial<ServiceRequest> = {}): ServiceR
 }
 
 describe('durable customer and service request records', () => {
+  it('creates an owner-approved invoice from the estimate snapshot and replays idempotently', async () => {
+    const repo = await repository();
+    const audit = { createdAt: '2026-09-25T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-25T12:00:00.000Z', updatedBy: 'owner-1' };
+    await repo.estimates.add({ id: 'estimate-1', jobId: 'HP-2000', status: 'Draft', subtotalCents: 25100, audit });
+    await repo.estimateLineItems.add({ id: 'estimate-line-1', estimateId: 'estimate-1', position: 0, description: 'Gutter cleaning', quantity: 2, unit: 'visit', unitPriceCents: 12550, lineTotalCents: 25100 });
+    const input = { jobId: 'HP-2000', invoiceId: 'invoice-1', operationId: 'invoice-create-1', actorId: 'owner-1', actorRole: 'owner_admin' as const, occurredAt: audit.createdAt, auditEventId: 'audit-invoice-1' };
+    expect((await repo.createInvoiceFromJob(input)).replayed).toBe(false);
+    await expect(repo.getInvoiceForJob('HP-2000')).resolves.toMatchObject({ invoice: { subtotalCents: 25100 }, lines: [{ description: 'Gutter cleaning' }] });
+    await expect(repo.getJob('HP-2000')).resolves.toMatchObject({ invoiceStatus: 'Draft', invoiceAmount: 251 });
+    expect((await repo.createInvoiceFromJob(input)).replayed).toBe(true);
+    await expect(repo.invoices.count()).resolves.toBe(1);
+  });
+
+  it('posts bounded owner-only payments and append-only void/refund corrections with reconciled balances', async () => {
+    const repo = await repository();
+    const audit = { createdAt: '2026-09-25T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-25T12:00:00.000Z', updatedBy: 'owner-1' };
+    await repo.invoices.add({ id: 'invoice-1', jobId: 'HP-2000', customerId: 'cus-1', status: 'Draft', subtotalCents: 32000, issuedAt: audit.createdAt, audit });
+    await repo.invoiceLineItems.add({ id: 'line-1', invoiceId: 'invoice-1', position: 0, description: 'Gutter cleaning', quantity: 1, unit: 'job', unitPriceCents: 32000, lineTotalCents: 32000 });
+    const payment = { invoiceId: 'invoice-1', entryId: 'payment-1', kind: 'payment' as const, amountCents: 20000, operationId: 'payment-op-1', actorId: 'owner-1', actorRole: 'owner_admin' as const, occurredAt: '2026-09-25T13:00:00.000Z', auditEventId: 'audit-payment-1' };
+    await expect(repo.postPaymentEntry({ ...payment, actorRole: 'dispatcher' })).rejects.toThrow(/owner approval/i);
+    await repo.postPaymentEntry(payment);
+    await expect(repo.postPaymentEntry({ ...payment, entryId: 'overpay', operationId: 'overpay', auditEventId: 'overpay-audit', amountCents: 12001 })).rejects.toThrow(/collectible balance/i);
+    await repo.postPaymentEntry({ ...payment, entryId: 'void-1', operationId: 'void-op-1', auditEventId: 'audit-void-1', kind: 'void', correctsEntryId: 'payment-1', amountCents: 5000 });
+    await repo.postPaymentEntry({ ...payment, entryId: 'refund-1', operationId: 'refund-op-1', auditEventId: 'audit-refund-1', kind: 'refund', correctsEntryId: 'payment-1', amountCents: 3000 });
+    await expect(repo.getInvoiceLedger('invoice-1')).resolves.toMatchObject({ paidCents: 12000, balanceCents: 20000, entries: [{ id: 'payment-1' }, { id: 'refund-1' }, { id: 'void-1' }] });
+  });
+
+  it('rolls back invoice creation when an outbox id collides', async () => {
+    const repo = await repository();
+    await repo.outboxOperations.add({ id: 'collision', entityType: 'job', entityId: 'HP-2000', kind: 'job.update', payload: {}, createdAt: '2026-09-25T12:00:00.000Z', status: 'pending' });
+    await expect(repo.createInvoiceFromJob({ jobId: 'HP-2000', invoiceId: 'invoice-collision', operationId: 'collision', actorId: 'owner-1', actorRole: 'owner_admin', occurredAt: '2026-09-25T12:00:00.000Z', auditEventId: 'audit-collision' })).rejects.toThrow();
+    await expect(repo.invoices.get('invoice-collision')).resolves.toBeUndefined();
+    await expect(repo.activityEvents.get('audit-collision')).resolves.toBeUndefined();
+  });
+
   it('saves an owner-approved estimate atomically with snapshots, audit, outbox, and legacy quote propagation', async () => {
     const repo = await repository();
     const input = {
