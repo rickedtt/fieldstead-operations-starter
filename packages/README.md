@@ -47,3 +47,17 @@ records. `transport.ts` contains the typed transport boundary and an in-memory
 test double; it does not expose a server route or provide persistence. See the
 [sync architecture](./fieldstead-sync/README.md) for idempotency rules and the
 remaining authenticated server work.
+
+## `fieldstead-quickbooks`
+
+`packages/fieldstead-quickbooks/src/index.ts` provides a dependency-free,
+disconnected QuickBooks Online US readiness boundary. It strictly parses
+non-secret fixture-only configuration, rejects credential-like keys recursively,
+maps labeled synthetic accounting fixtures into deterministic staged previews,
+and reconciles invoice, payment, and credit totals in integer cents.
+
+The adapter always advertises `connected: false`, `mode: fixture-only`, and
+`externalWrites: false`. It has no OAuth, provider SDK, network, environment,
+database, filesystem, repository, outbox, or migration behavior. See the
+[package README](./fieldstead-quickbooks/README.md) for supported mappings and
+deferred live integration work.

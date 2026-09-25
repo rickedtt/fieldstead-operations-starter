@@ -73,9 +73,9 @@
 ### 6B — QuickBooks discovery and mapping (still disconnected)
 
 - [ ] Document supported QuickBooks product/region and official API constraints before implementation.
-- [ ] Define customer, service item, tax, invoice, payment, credit, account, and class/location mappings.
-- [ ] Add a connection-readiness checklist and non-secret configuration model.
-- [ ] Build fixture-driven adapter contract tests, pagination tests, rate-limit handling, and error redaction.
+- [x] Define disconnected fixture mappings for customer, service item, tax, invoice, payment, credit, account, and class/location records.
+- [x] Add a strict non-secret, QuickBooks Online US fixture-only readiness configuration model.
+- [ ] Build live-adapter pagination and rate-limit handling after OAuth/API work is explicitly authorized. Fixture contract tests and recursive credential-key rejection are complete.
 
 ### 6C — Reviewed connection and read-only import
 
