@@ -1,15 +1,18 @@
 import Dexie, { liveQuery, type EntityTable, type Observable } from 'dexie';
 import {
   canTransitionJobStatus,
+  parseCatalogItem,
   parseCommunicationLink,
   parseActivityEvent,
   parseCustomer,
   parseEstimate,
   parseEstimateLineItem,
+  parseEquipmentAsset,
   parseFieldEvent,
   parseInvoice,
   parseInvoiceLineItem,
   parseJob,
+  parseJobCostEntry,
   parseOperationalAttachment,
   parseOutboxOperation,
   parsePaymentEntry,
@@ -19,20 +22,24 @@ import {
   parseServiceRequest,
   previewRecurringServiceOccurrences,
   schedulesOverlap,
+  summarizeJobCosting,
   type ActivityEvent,
   type CalendarEntry,
+  type CatalogItem,
   type CommunicationEntityType,
   type CommunicationLink,
   type Customer,
   type DispatchActorRole,
   type Estimate,
   type EstimateLineItem,
+  type EquipmentAsset,
   type FieldEvent,
   type FieldEventKind,
   type FieldJobState,
   type Invoice,
   type InvoiceLineItem,
   type Job,
+  type JobCostEntry,
   type JobAssignment,
   type OutboxOperation,
   type OperationalAttachment,
@@ -168,6 +175,9 @@ export class FieldsteadRepository extends Dexie implements SyncOutbox {
   recurringServiceOccurrences!: EntityTable<RecurringServiceOccurrence, 'id'>;
   pricebookItemVersions!: EntityTable<PricebookItem, 'id'>;
   communicationLinks!: EntityTable<CommunicationLink, 'id'>;
+  catalogItems!: EntityTable<CatalogItem, 'id'>;
+  equipmentAssets!: EntityTable<EquipmentAsset, 'id'>;
+  jobCostEntries!: EntityTable<JobCostEntry, 'id'>;
 
   constructor(databaseName = 'fieldstead') {
     super(databaseName);
@@ -285,7 +295,24 @@ export class FieldsteadRepository extends Dexie implements SyncOutbox {
       fieldEvents: 'id, &operationId, jobId, actorId, occurredAt, syncState', invoices: 'id, &jobId, customerId, status, issuedAt, dueAt', invoiceLineItems: 'id, invoiceId, [invoiceId+position]', paymentEntries: 'id, invoiceId, kind, occurredAt, correctsEntryId', pricebookItemVersions: '[id+version], id, version, active, audit.updatedAt', recurringServiceAgreements: 'id, customerId, status, audit.updatedAt', recurringServiceOccurrences: 'id, agreementId, status, &provenanceKey, generatedEntityId',
       communicationLinks: 'id, &operationId, [entityType+entityId], &[source.accountId+source.messageId+entityType+entityId], occurredAt, linkedAt',
     });
+    this.version(13).stores({
+      jobs: 'id, customerId, serviceRequestId, status, scheduledFor, updatedAt', assignments: 'id, jobId, assigneeId, assignedAt, unassignedAt', activityEvents: 'id, jobId, customerId, at', outboxOperations: 'id, status, createdAt, [status+createdAt], [entityType+entityId]', metadata: 'key, updatedAt',
+      customers: 'id, primaryEmail, primaryPhone, serviceAddress, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', serviceRequests: 'id, customerId, status, convertedJobId, audit.updatedAt, &[sourceEmail.accountId+sourceEmail.messageId]', attachments: 'id, [ownerType+ownerId], createdAt, checksum', pricebookItems: 'id, name, active, audit.updatedAt', estimates: 'id, &jobId, status, audit.updatedAt', estimateLineItems: 'id, estimateId, [estimateId+position]',
+      fieldEvents: 'id, &operationId, jobId, actorId, occurredAt, syncState', invoices: 'id, &jobId, customerId, status, issuedAt, dueAt', invoiceLineItems: 'id, invoiceId, [invoiceId+position]', paymentEntries: 'id, invoiceId, kind, occurredAt, correctsEntryId', pricebookItemVersions: '[id+version], id, version, active, audit.updatedAt', recurringServiceAgreements: 'id, customerId, status, audit.updatedAt', recurringServiceOccurrences: 'id, agreementId, status, &provenanceKey, generatedEntityId', communicationLinks: 'id, &operationId, [entityType+entityId], &[source.accountId+source.messageId+entityType+entityId], occurredAt, linkedAt',
+      catalogItems: 'id, tenantId, [tenantId+name], active, audit.updatedAt', equipmentAssets: 'id, tenantId, [tenantId+name], active, audit.updatedAt', jobCostEntries: 'id, tenantId, jobId, [tenantId+jobId], category, audit.updatedAt',
+    });
   }
+
+  private requireOwner(role: DispatchActorRole): void { if (role !== 'owner_admin') throw new Error('Owner approval is required'); }
+  async listCatalogItems(tenantId: string): Promise<CatalogItem[]> { return (await this.catalogItems.where('tenantId').equals(tenantId).toArray()).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)); }
+  async listEquipmentAssets(tenantId: string): Promise<EquipmentAsset[]> { return (await this.equipmentAssets.where('tenantId').equals(tenantId).toArray()).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)); }
+  async saveCatalogItem(input: { item: CatalogItem; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string }): Promise<CatalogItem> { this.requireOwner(input.actorRole); const item = parseCatalogItem(input.item); if (item.audit.updatedBy !== input.actorId || item.audit.updatedAt !== input.occurredAt) throw new Error('Catalog audit identity must match the owner command'); return this.transaction('rw', [this.catalogItems, this.activityEvents], async () => { await this.catalogItems.put(item); await this.activityEvents.add(parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, actor: input.actorId, action: 'Catalog item saved', detail: `${item.name}: ${item.quantity} ${item.unit} at ${(item.unitCostCents / 100).toFixed(2)} each.` })); return item; }); }
+  async saveEquipmentAsset(input: { asset: EquipmentAsset; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string }): Promise<EquipmentAsset> { this.requireOwner(input.actorRole); const asset = parseEquipmentAsset(input.asset); if (asset.audit.updatedBy !== input.actorId || asset.audit.updatedAt !== input.occurredAt) throw new Error('Equipment audit identity must match the owner command'); return this.transaction('rw', [this.equipmentAssets, this.activityEvents], async () => { await this.equipmentAssets.put(asset); await this.activityEvents.add(parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, actor: input.actorId, action: 'Equipment asset saved', detail: `${asset.name}: quantity ${asset.quantity}, ${(asset.hourlyCostCents / 100).toFixed(2)} hourly cost.` })); return asset; }); }
+  async saveJobCostEntry(input: { entry: JobCostEntry; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string }): Promise<JobCostEntry> { this.requireOwner(input.actorRole); const entry = parseJobCostEntry(input.entry); if (entry.audit.updatedBy !== input.actorId || entry.audit.updatedAt !== input.occurredAt) throw new Error('Job cost audit identity must match the owner command'); return this.transaction('rw', [this.jobs, this.jobCostEntries, this.activityEvents], async () => { const job = await this.jobs.get(entry.jobId); if (!job) throw new Error(`Job ${entry.jobId} was not found`); await this.jobCostEntries.put(entry); await this.activityEvents.add(parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, jobId: job.id, customerId: job.customerId, actor: input.actorId, action: 'Job cost saved', detail: `${entry.category}: ${entry.description}; estimate ${(entry.estimatedCents / 100).toFixed(2)}${entry.actualCents === undefined ? '; actual incomplete' : `; actual ${(entry.actualCents / 100).toFixed(2)}`}.` })); return entry; }); }
+  async deleteCatalogItem(input: { tenantId: string; itemId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string }): Promise<void> { this.requireOwner(input.actorRole); await this.transaction('rw', [this.catalogItems, this.activityEvents], async () => { const item = await this.catalogItems.get(input.itemId); if (!item || item.tenantId !== input.tenantId) throw new Error(`Catalog item ${input.itemId} was not found`); await this.catalogItems.delete(item.id); await this.activityEvents.add(parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, actor: input.actorId, action: 'Catalog item deleted', detail: `${item.name} deleted from local catalog.` })); }); }
+  async deleteEquipmentAsset(input: { tenantId: string; assetId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string }): Promise<void> { this.requireOwner(input.actorRole); await this.transaction('rw', [this.equipmentAssets, this.activityEvents], async () => { const asset = await this.equipmentAssets.get(input.assetId); if (!asset || asset.tenantId !== input.tenantId) throw new Error(`Equipment asset ${input.assetId} was not found`); await this.equipmentAssets.delete(asset.id); await this.activityEvents.add(parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, actor: input.actorId, action: 'Equipment asset deleted', detail: `${asset.name} deleted from local equipment.` })); }); }
+  async deleteJobCostEntry(input: { tenantId: string; entryId: string; actorId: string; actorRole: DispatchActorRole; occurredAt: string; auditEventId: string }): Promise<void> { this.requireOwner(input.actorRole); await this.transaction('rw', [this.jobCostEntries, this.activityEvents], async () => { const entry = await this.jobCostEntries.get(input.entryId); if (!entry || entry.tenantId !== input.tenantId) throw new Error(`Job cost ${input.entryId} was not found`); await this.jobCostEntries.delete(entry.id); await this.activityEvents.add(parseActivityEvent({ id: input.auditEventId, at: input.occurredAt, jobId: entry.jobId, actor: input.actorId, action: 'Job cost deleted', detail: `${entry.description} deleted from local job costing.` })); }); }
+  async getJobCosting(tenantId: string, jobId: string) { const job = await this.jobs.get(jobId); if (!job) throw new Error(`Job ${jobId} was not found`); const entries = (await this.jobCostEntries.where('[tenantId+jobId]').equals([tenantId, jobId]).toArray()).sort((a, b) => a.category.localeCompare(b.category) || a.description.localeCompare(b.description) || a.id.localeCompare(b.id)); const invoice = await this.invoices.where('jobId').equals(jobId).first(); return { entries, summary: summarizeJobCosting({ quotedRevenueCents: Math.round(job.quoteAmount * 100), invoicedRevenueCents: invoice?.subtotalCents ?? Math.round(job.invoiceAmount * 100), entries }) }; }
 
   async listCommunicationTimeline(entityType: CommunicationEntityType, entityId: string): Promise<CommunicationLink[]> {
     return (await this.communicationLinks.where('[entityType+entityId]').equals([entityType, entityId]).toArray()).sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.linkedAt.localeCompare(right.linkedAt) || left.id.localeCompare(right.id));

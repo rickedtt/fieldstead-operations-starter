@@ -153,6 +153,30 @@ function sampleServiceRequest(overrides: Partial<ServiceRequest> = {}): ServiceR
   };
 }
 
+describe('inventory, equipment, and job costing repository', () => {
+  it('saves tenant-scoped inventory, equipment, and job costs with owner authorization and audit activity', async () => {
+    const repo = await repository();
+    const audit = { createdAt: '2026-09-26T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-26T12:00:00.000Z', updatedBy: 'owner-1' };
+    await expect(repo.saveCatalogItem({ item: { id: 'catalog-1', tenantId: 'tenant-1', name: 'Mulch', unit: 'yard', quantity: 4, unitCostCents: 4200, active: true, audit }, actorId: 'dispatcher', actorRole: 'dispatcher', occurredAt: audit.updatedAt, auditEventId: 'audit-nope' })).rejects.toThrow(/owner approval/i);
+    await repo.saveCatalogItem({ item: { id: 'catalog-1', tenantId: 'tenant-1', name: 'Mulch', unit: 'yard', quantity: 4, unitCostCents: 4200, active: true, audit }, actorId: 'owner-1', actorRole: 'owner_admin', occurredAt: audit.updatedAt, auditEventId: 'audit-catalog' });
+    await repo.saveEquipmentAsset({ asset: { id: 'asset-1', tenantId: 'tenant-1', name: 'Mini skid steer', quantity: 1, hourlyCostCents: 6800, active: true, audit }, actorId: 'owner-1', actorRole: 'owner_admin', occurredAt: audit.updatedAt, auditEventId: 'audit-asset' });
+    await repo.saveJobCostEntry({ entry: { id: 'cost-1', tenantId: 'tenant-1', jobId: 'HP-2000', category: 'equipment', description: 'Mini skid steer', estimatedCents: 6800, actualCents: 7200, audit }, actorId: 'owner-1', actorRole: 'owner_admin', occurredAt: audit.updatedAt, auditEventId: 'audit-cost' });
+    await expect(repo.listCatalogItems('tenant-1')).resolves.toHaveLength(1);
+    await expect(repo.listEquipmentAssets('tenant-1')).resolves.toHaveLength(1);
+    await expect(repo.getJobCosting('tenant-1', 'HP-2000')).resolves.toMatchObject({ summary: { quotedRevenueCents: 32000, estimatedCostCents: 6800, actualCostCents: 7200, costVarianceCents: 400 } });
+    await expect(repo.activityEvents.bulkGet(['audit-catalog', 'audit-asset', 'audit-cost'])).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ action: 'Catalog item saved' }), expect.objectContaining({ action: 'Equipment asset saved' }), expect.objectContaining({ action: 'Job cost saved' })]));
+  });
+  it('deletes tenant-owned records only and preserves prior data', async () => {
+    const repo = await repository();
+    const audit = { createdAt: '2026-09-26T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-26T12:00:00.000Z', updatedBy: 'owner-1' };
+    await repo.catalogItems.add({ id: 'catalog-1', tenantId: 'tenant-1', name: 'Mulch', unit: 'yard', quantity: 4, unitCostCents: 4200, active: true, audit });
+    await expect(repo.deleteCatalogItem({ tenantId: 'tenant-2', itemId: 'catalog-1', actorId: 'owner-1', actorRole: 'owner_admin', occurredAt: audit.updatedAt, auditEventId: 'audit-wrong' })).rejects.toThrow(/not found/i);
+    await repo.deleteCatalogItem({ tenantId: 'tenant-1', itemId: 'catalog-1', actorId: 'owner-1', actorRole: 'owner_admin', occurredAt: audit.updatedAt, auditEventId: 'audit-delete' });
+    await expect(repo.catalogItems.count()).resolves.toBe(0);
+    await expect(repo.getJob('HP-2000')).resolves.toEqual(sampleJob());
+  });
+});
+
 describe('durable customer and service request records', () => {
   it('creates owner-explicit metadata-only communication links with audit and idempotent replay', async () => {
     const repo = await repository();

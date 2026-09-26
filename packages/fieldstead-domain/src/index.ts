@@ -156,6 +156,12 @@ export type Invoice = { id: string; jobId: string; customerId: string; estimateI
 export type InvoiceLineItem = { id: string; invoiceId: string; position: number; description: string; quantity: number; unit: string; unitPriceCents: number; lineTotalCents: number; sourceEstimateLineItemId?: string; pricebookItemId?: string; pricebookItemName?: string };
 export type PaymentEntryKind = 'payment' | 'void' | 'refund';
 export type PaymentEntry = { id: string; invoiceId: string; kind: PaymentEntryKind; amountCents: number; occurredAt: string; actorId: string; correctsEntryId?: string; note?: string };
+export type CatalogItem = { id: string; tenantId: string; name: string; unit: string; quantity: number; unitCostCents: number; active: boolean; audit: AuditMetadata };
+export type EquipmentAsset = { id: string; tenantId: string; name: string; quantity: number; hourlyCostCents: number; active: boolean; audit: AuditMetadata };
+export const JOB_COST_CATEGORIES = ['labor', 'material', 'equipment', 'other'] as const;
+export type JobCostCategory = (typeof JOB_COST_CATEGORIES)[number];
+export type JobCostEntry = { id: string; tenantId: string; jobId: string; category: JobCostCategory; description: string; estimatedCents: number; actualCents?: number; audit: AuditMetadata };
+export type JobCostSummary = { quotedRevenueCents: number; invoicedRevenueCents: number; estimatedCostCents: number; actualCostCents: number; estimatedMarginCents: number; actualMarginCents: number; costVarianceCents: number; warnings: string[] };
 
 export type OutboxOperation = {
   id: string;
@@ -250,7 +256,7 @@ function numberField(value: UnknownRecord, field: string, owner: string): number
 
 function integerField(value: UnknownRecord, field: string, owner: string, minimum = 0): number {
   const number = numberField(value, field, owner);
-  if (!Number.isInteger(number) || number < minimum) throw new TypeError(`${owner}.${field} must be an integer of at least ${minimum}`);
+  if (!Number.isSafeInteger(number) || number < minimum) throw new TypeError(`${owner}.${field} must be a safe integer of at least ${minimum}`);
   return number;
 }
 
@@ -466,6 +472,28 @@ export function parsePaymentEntry(value: unknown): PaymentEntry {
   if (kind !== 'payment' && !correctsEntryId) throw new TypeError('PaymentEntry.correctsEntryId is required for corrections');
   if (kind === 'payment' && correctsEntryId) throw new TypeError('PaymentEntry.correctsEntryId is not allowed for payments');
   return { id: stringField(entry, 'id', 'PaymentEntry'), invoiceId: stringField(entry, 'invoiceId', 'PaymentEntry'), kind, amountCents: integerField(entry, 'amountCents', 'PaymentEntry', 1), occurredAt: stringField(entry, 'occurredAt', 'PaymentEntry'), actorId: stringField(entry, 'actorId', 'PaymentEntry'), correctsEntryId, note: optionalStringField(entry, 'note', 'PaymentEntry') };
+}
+
+export function parseCatalogItem(value: unknown): CatalogItem {
+  const item = record(value, 'CatalogItem');
+  return { id: stringField(item, 'id', 'CatalogItem'), tenantId: stringField(item, 'tenantId', 'CatalogItem'), name: stringField(item, 'name', 'CatalogItem'), unit: stringField(item, 'unit', 'CatalogItem'), quantity: integerField(item, 'quantity', 'CatalogItem'), unitCostCents: integerField(item, 'unitCostCents', 'CatalogItem'), active: booleanField(item, 'active', 'CatalogItem'), audit: parseAuditMetadata(item.audit) };
+}
+export function parseEquipmentAsset(value: unknown): EquipmentAsset {
+  const asset = record(value, 'EquipmentAsset');
+  return { id: stringField(asset, 'id', 'EquipmentAsset'), tenantId: stringField(asset, 'tenantId', 'EquipmentAsset'), name: stringField(asset, 'name', 'EquipmentAsset'), quantity: integerField(asset, 'quantity', 'EquipmentAsset'), hourlyCostCents: integerField(asset, 'hourlyCostCents', 'EquipmentAsset'), active: booleanField(asset, 'active', 'EquipmentAsset'), audit: parseAuditMetadata(asset.audit) };
+}
+export function parseJobCostEntry(value: unknown): JobCostEntry {
+  const entry = record(value, 'JobCostEntry');
+  return { id: stringField(entry, 'id', 'JobCostEntry'), tenantId: stringField(entry, 'tenantId', 'JobCostEntry'), jobId: stringField(entry, 'jobId', 'JobCostEntry'), category: enumField(entry, 'category', 'JobCostEntry', JOB_COST_CATEGORIES), description: stringField(entry, 'description', 'JobCostEntry'), estimatedCents: integerField(entry, 'estimatedCents', 'JobCostEntry'), actualCents: entry.actualCents === undefined ? undefined : integerField(entry, 'actualCents', 'JobCostEntry'), audit: parseAuditMetadata(entry.audit) };
+}
+export function summarizeJobCosting(input: { quotedRevenueCents: number; invoicedRevenueCents: number; entries: JobCostEntry[] }): JobCostSummary {
+  if (!Number.isSafeInteger(input.quotedRevenueCents) || input.quotedRevenueCents < 0 || !Number.isSafeInteger(input.invoicedRevenueCents) || input.invoicedRevenueCents < 0) throw new TypeError('Job costing revenue must be non-negative safe integer cents');
+  const entries = input.entries.map(parseJobCostEntry);
+  const estimatedCostCents = entries.reduce((sum, entry) => sum + entry.estimatedCents, 0);
+  const actualCostCents = entries.reduce((sum, entry) => sum + (entry.actualCents ?? 0), 0);
+  if (!Number.isSafeInteger(estimatedCostCents) || !Number.isSafeInteger(actualCostCents)) throw new TypeError('Job costing totals must be safe integer cents');
+  const missing = JOB_COST_CATEGORIES.filter((category) => entries.some((entry) => entry.category === category && entry.actualCents === undefined));
+  return { quotedRevenueCents: input.quotedRevenueCents, invoicedRevenueCents: input.invoicedRevenueCents, estimatedCostCents, actualCostCents, estimatedMarginCents: input.quotedRevenueCents - estimatedCostCents, actualMarginCents: input.invoicedRevenueCents - actualCostCents, costVarianceCents: actualCostCents - estimatedCostCents, warnings: missing.map((category) => `Actual ${category} cost is incomplete.`) };
 }
 
 export function parseJob(value: unknown): Job {

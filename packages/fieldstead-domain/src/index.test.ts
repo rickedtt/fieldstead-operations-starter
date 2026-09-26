@@ -7,6 +7,10 @@ import {
   parseEstimateLineItem,
   parseInvoice,
   parseInvoiceLineItem,
+  parseCatalogItem,
+  parseEquipmentAsset,
+  parseJobCostEntry,
+  summarizeJobCosting,
   parseJob,
   parseCommunicationLink,
   parseOutboxOperation,
@@ -159,5 +163,26 @@ describe('invoice and payment ledger records', () => {
     expect(() => parseInvoice({ id: 'invoice-1', jobId: 'HP-2000', customerId: 'cus-1', status: 'Draft', subtotalCents: 12.5, issuedAt: audit.createdAt, audit })).toThrow(/integer/);
     expect(() => parseInvoiceLineItem({ id: 'line-1', invoiceId: 'invoice-1', position: 0, description: 'Labor', quantity: 2, unit: 'hour', unitPriceCents: 100, lineTotalCents: 1 })).toThrow(/lineTotalCents/);
     expect(() => parsePaymentEntry({ id: 'void-1', invoiceId: 'invoice-1', kind: 'void', amountCents: 100, occurredAt: audit.createdAt, actorId: 'owner-1' })).toThrow(/correctsEntryId/);
+  });
+});
+
+
+describe('inventory, equipment, and job costing contracts', () => {
+  const audit = { createdAt: '2026-09-26T12:00:00.000Z', createdBy: 'owner-1', updatedAt: '2026-09-26T12:00:00.000Z', updatedBy: 'owner-1' };
+  it('parses tenant-scoped records with safe integer values', () => {
+    expect(parseCatalogItem({ id: 'catalog-1', tenantId: 'tenant-1', name: 'Mulch', unit: 'yard', quantity: 12, unitCostCents: 4250, active: true, audit })).toMatchObject({ quantity: 12, unitCostCents: 4250 });
+    expect(parseEquipmentAsset({ id: 'asset-1', tenantId: 'tenant-1', name: 'Mini skid steer', quantity: 1, hourlyCostCents: 6800, active: true, audit })).toMatchObject({ hourlyCostCents: 6800 });
+    expect(parseJobCostEntry({ id: 'cost-1', tenantId: 'tenant-1', jobId: 'HP-2000', category: 'material', description: 'Mulch', estimatedCents: 8500, actualCents: 9000, audit })).toMatchObject({ estimatedCents: 8500, actualCents: 9000 });
+  });
+  it('rejects negative, fractional, and unsafe quantities or cents', () => {
+    expect(() => parseCatalogItem({ id: 'catalog-1', tenantId: 'tenant-1', name: 'Mulch', unit: 'yard', quantity: -1, unitCostCents: 1, active: true, audit })).toThrow(/quantity/);
+    expect(() => parseEquipmentAsset({ id: 'asset-1', tenantId: 'tenant-1', name: 'Skid', quantity: 1.5, hourlyCostCents: 1, active: true, audit })).toThrow(/quantity/);
+    expect(() => parseJobCostEntry({ id: 'cost-1', tenantId: 'tenant-1', jobId: 'HP-2000', category: 'labor', description: 'Crew', estimatedCents: Number.MAX_SAFE_INTEGER + 1, audit })).toThrow(/safe integer/);
+  });
+  it('summarizes revenue, margins, variance, and incomplete actual data deterministically', () => {
+    expect(summarizeJobCosting({ quotedRevenueCents: 50000, invoicedRevenueCents: 52000, entries: [
+      parseJobCostEntry({ id: 'labor', tenantId: 'tenant-1', jobId: 'HP-2000', category: 'labor', description: 'Crew', estimatedCents: 20000, actualCents: 22000, audit }),
+      parseJobCostEntry({ id: 'material', tenantId: 'tenant-1', jobId: 'HP-2000', category: 'material', description: 'Mulch', estimatedCents: 10000, audit }),
+    ] })).toEqual({ quotedRevenueCents: 50000, invoicedRevenueCents: 52000, estimatedCostCents: 30000, actualCostCents: 22000, estimatedMarginCents: 20000, actualMarginCents: 30000, costVarianceCents: -8000, warnings: ['Actual material cost is incomplete.'] });
   });
 });

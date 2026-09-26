@@ -356,6 +356,10 @@ export class LocalJobsStore {
     return this.repository!.saveEstimate(input);
   }
 
+  async getJobCosting(tenantId: string, jobId: string) { await this.start(); return this.repository!.getJobCosting(tenantId, jobId); }
+  async saveJobCostEntry(input: Parameters<FieldsteadRepository['saveJobCostEntry']>[0]) { await this.start(); return this.repository!.saveJobCostEntry(input); }
+  async deleteJobCostEntry(input: Parameters<FieldsteadRepository['deleteJobCostEntry']>[0]) { await this.start(); return this.repository!.deleteJobCostEntry(input); }
+
   async buildOperationsReport(input: Parameters<FieldsteadRepository['buildOperationsReport']>[0]) {
     await this.start();
     return this.repository!.buildOperationsReport(input);
@@ -479,6 +483,9 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     getEstimateForJob: store.getEstimateForJob.bind(store),
     getInvoiceForJob: store.getInvoiceForJob.bind(store),
     saveEstimate: store.saveEstimate.bind(store),
+    getJobCosting: store.getJobCosting.bind(store),
+    saveJobCostEntry: store.saveJobCostEntry.bind(store),
+    deleteJobCostEntry: store.deleteJobCostEntry.bind(store),
     buildOperationsReport,
     exportOperationsReportCsv,
     listAssignedJobs: store.listAssignedJobs.bind(store),
