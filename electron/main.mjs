@@ -14,6 +14,7 @@ import { clearEmailConfig, emailBulkAction, emailMessageAction, getEmailAccounts
 import { createSetupStore } from './setup-store.mjs';
 import { openSafeExternalLink } from './external-link.mjs';
 import { createOperationalAttachmentStore, OPERATIONAL_ATTACHMENT_MIME_TYPES } from './operational-attachment-store.mjs';
+import { forwardServerOutput } from './server-output.mjs';
 import updater from 'electron-updater';
 const { autoUpdater } = updater;
 
@@ -252,8 +253,8 @@ function startServer(port) {
     windowsHide: true,
   });
 
-  serverProcess.stdout.on('data', (chunk) => process.stdout.write(`[vinext] ${chunk}`));
-  serverProcess.stderr.on('data', (chunk) => process.stderr.write(`[vinext] ${chunk}`));
+  forwardServerOutput(serverProcess.stdout, process.stdout);
+  forwardServerOutput(serverProcess.stderr, process.stderr);
 
   return serverProcess;
 }
