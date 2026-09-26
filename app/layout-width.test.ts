@@ -39,9 +39,19 @@ describe('main workspace layout', () => {
   it('keeps Settings vertically reachable at the minimum 800x600 desktop size', () => {
     const persistentSidebar = css.slice(css.indexOf('/* Persistent side navigation:'));
 
-    expect(persistentSidebar).toMatch(/\.sidebar\{[^}]*min-width:0[^}]*overflow-y:auto[^}]*overflow-x:hidden/);
-    expect(persistentSidebar).toMatch(/\.sidebar nav\{[^}]*min-height:0/);
+    expect(persistentSidebar).toMatch(/\.sidebar\{[^}]*min-width:0[^}]*overflow:hidden/);
+    expect(persistentSidebar).toMatch(/\.sidebar nav\{[^}]*min-height:0[^}]*overflow-y:auto[^}]*scrollbar-width:none/);
+    expect(persistentSidebar).toMatch(/\.sidebar nav::-webkit-scrollbar\{display:none\}/);
     expect(persistentSidebar).toMatch(/\.sidebar-foot\{[^}]*flex:none/);
+  });
+
+  it('uses a compact sidebar rhythm at the supported 800x600 window size', () => {
+    const compactSidebar = css.slice(css.indexOf('/* Compact supported-window sidebar:'));
+
+    expect(compactSidebar).toMatch(/@media\(max-height:760px\) and \(min-width:801px\)/);
+    expect(compactSidebar).toMatch(/\.sidebar\{[^}]*padding:12px 10px 10px/);
+    expect(compactSidebar).toMatch(/\.nav-item\{[^}]*min-height:30px[^}]*padding:6px 8px[^}]*font-size:11px/);
+    expect(compactSidebar).toMatch(/\.sidebar-foot\{[^}]*display:none/);
   });
 
   it('lets the narrow-window safeguard win over persistent desktop sidebar rules', () => {

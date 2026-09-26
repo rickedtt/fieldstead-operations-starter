@@ -332,6 +332,9 @@ function createWindow(serverUrl) {
   mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
     if (!isAllowedNavigationUrl(targetUrl, serverUrl)) event.preventDefault();
   });
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.setZoomFactor(1);
+  });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.on('closed', () => {
     mainWindow = undefined;

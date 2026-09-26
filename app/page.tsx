@@ -337,7 +337,6 @@ export default function Home() {
             </button>
           ); })}
         </nav>
-        <div className="sidebar-foot"><span className="avatar">FS</span><span>Fieldstead owner</span></div>
       </aside>
 
       <section className="workspace">
