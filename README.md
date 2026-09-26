@@ -52,7 +52,7 @@ The program now follows the synchronized Starter definition used by the website 
 
 - The live starting workspace contains only the Fieldstead Systems internal identity and no invented customers, jobs, amounts, or activity. Enter confirmed Fieldstead records only.
 - IndexedDB currently persists job records, activity supplied with job mutations, assignments, outbox operations, and migration metadata. Customer additions and the in-memory activity view require JSON backup/restore for continuity across a full app reload.
-- “Sent,” “Paid,” and similar states are manual bookkeeping labels. No email, SMS, invoice PDF delivery, payment link, charge, bank reconciliation, or customer notification occurs.
+- “Sent,” “Paid,” and similar states are manual bookkeeping labels. Draft estimates can be opened in a local print preview and saved with the operating system's print-to-PDF option, but no email, SMS, estimate delivery, invoice PDF delivery, payment link, charge, bank reconciliation, or customer notification occurs.
 - The app is single-device and has no live multi-user synchronization, account provisioning, remote backup, conflict UI, or production authentication flow.
 - CSV import and JSON restore trust the owner to choose synthetic files. They are local workflows, not a production data migration service.
 - Attachment retention is manual. Files are deleted only after explicit owner confirmation; there is no automatic purge. The JSON backup excludes attachment binaries and metadata, so use the separate complete attachment-store export when those files must be retained.
