@@ -12,6 +12,7 @@ describe('main workspace layout', () => {
       /\.content\{[^}]*width:min\(1180px,calc\(100% - 48px\)\)[^}]*margin:0 auto/,
     );
     expect(css).not.toMatch(/\/\* Fluid application canvas:/);
+    expect(css).not.toContain('Fieldstead owner</span>');
   });
 
   it('keeps email layout safeguards scoped to the email page', () => {
@@ -48,7 +49,7 @@ describe('main workspace layout', () => {
   it('uses a compact sidebar rhythm at the supported 800x600 window size', () => {
     const compactSidebar = css.slice(css.indexOf('/* Compact supported-window sidebar:'));
 
-    expect(compactSidebar).toMatch(/@media\(max-height:760px\) and \(min-width:801px\)/);
+    expect(compactSidebar).toMatch(/@media\(max-height:760px\) and \(min-width:800px\)/);
     expect(compactSidebar).toMatch(/\.sidebar\{[^}]*padding:12px 10px 10px/);
     expect(compactSidebar).toMatch(/\.nav-item\{[^}]*min-height:30px[^}]*padding:6px 8px[^}]*font-size:11px/);
     expect(compactSidebar).toMatch(/\.sidebar-foot\{[^}]*display:none/);
