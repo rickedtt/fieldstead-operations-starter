@@ -357,6 +357,12 @@ export class LocalJobsStore {
   }
 
   async getJobCosting(tenantId: string, jobId: string) { await this.start(); return this.repository!.getJobCosting(tenantId, jobId); }
+  async listCatalogItems(tenantId: string) { await this.start(); return this.repository!.listCatalogItems(tenantId); }
+  async listEquipmentAssets(tenantId: string) { await this.start(); return this.repository!.listEquipmentAssets(tenantId); }
+  async saveCatalogItem(input: Parameters<FieldsteadRepository['saveCatalogItem']>[0]) { await this.start(); return this.repository!.saveCatalogItem(input); }
+  async deleteCatalogItem(input: Parameters<FieldsteadRepository['deleteCatalogItem']>[0]) { await this.start(); return this.repository!.deleteCatalogItem(input); }
+  async saveEquipmentAsset(input: Parameters<FieldsteadRepository['saveEquipmentAsset']>[0]) { await this.start(); return this.repository!.saveEquipmentAsset(input); }
+  async deleteEquipmentAsset(input: Parameters<FieldsteadRepository['deleteEquipmentAsset']>[0]) { await this.start(); return this.repository!.deleteEquipmentAsset(input); }
   async saveJobCostEntry(input: Parameters<FieldsteadRepository['saveJobCostEntry']>[0]) { await this.start(); return this.repository!.saveJobCostEntry(input); }
   async deleteJobCostEntry(input: Parameters<FieldsteadRepository['deleteJobCostEntry']>[0]) { await this.start(); return this.repository!.deleteJobCostEntry(input); }
 
@@ -484,6 +490,12 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     getInvoiceForJob: store.getInvoiceForJob.bind(store),
     saveEstimate: store.saveEstimate.bind(store),
     getJobCosting: store.getJobCosting.bind(store),
+    listCatalogItems: store.listCatalogItems.bind(store),
+    listEquipmentAssets: store.listEquipmentAssets.bind(store),
+    saveCatalogItem: store.saveCatalogItem.bind(store),
+    deleteCatalogItem: store.deleteCatalogItem.bind(store),
+    saveEquipmentAsset: store.saveEquipmentAsset.bind(store),
+    deleteEquipmentAsset: store.deleteEquipmentAsset.bind(store),
     saveJobCostEntry: store.saveJobCostEntry.bind(store),
     deleteJobCostEntry: store.deleteJobCostEntry.bind(store),
     buildOperationsReport,
