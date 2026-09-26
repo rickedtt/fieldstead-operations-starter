@@ -95,7 +95,9 @@
 /* Persistent side navigation: collapse it instead of replacing it with a bottom bar. */
 .app-shell{grid-template-columns:238px minmax(0,1fr)}
 .app-shell.sidebar-collapsed{grid-template-columns:78px minmax(0,1fr)}
-.sidebar{min-width:0;overflow:hidden}
+.sidebar{min-width:0;overflow-y:auto;overflow-x:hidden}
+.sidebar nav{min-height:0}
+.sidebar-foot{flex:none}
 .sidebar-toggle{align-self:flex-end;width:28px;height:28px;margin:-8px 0 14px;border:1px solid #698576;border-radius:7px;background:transparent;color:#dbe6df;font-size:22px;line-height:1}
 .sidebar-toggle:hover{background:#24483e}
 .sidebar-collapsed .brand{justify-content:center;padding-bottom:24px}
@@ -290,7 +292,7 @@ html,body,#root{margin:0!important;padding:0!important;background:var(--green-da
 /* Small-window navigation: keep a compact accessible rail instead of hiding the sidebar. */
 @media(max-width:800px){
   .app-shell,.app-shell.sidebar-collapsed{display:grid;grid-template-columns:64px minmax(0,1fr);min-width:0}
-  .sidebar{display:flex;width:64px;height:100vh;padding:14px 8px 10px;overflow:hidden}
+  .sidebar{display:flex;width:64px;height:100vh;padding:14px 8px 10px;overflow-y:auto;overflow-x:hidden}
   .brand{justify-content:center;padding-bottom:16px}
   .brand-logo-full{display:none}
   .brand-logo-compact{display:block;width:32px;height:32px;border-radius:8px}

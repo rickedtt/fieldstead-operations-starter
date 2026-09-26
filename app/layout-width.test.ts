@@ -36,6 +36,14 @@ describe('main workspace layout', () => {
     expect(css).toMatch(/html,body\{[^}]*max-width:100%[^}]*overflow-x:hidden/);
   });
 
+  it('keeps Settings vertically reachable at the minimum 800x600 desktop size', () => {
+    const persistentSidebar = css.slice(css.indexOf('/* Persistent side navigation:'));
+
+    expect(persistentSidebar).toMatch(/\.sidebar\{[^}]*min-width:0[^}]*overflow-y:auto[^}]*overflow-x:hidden/);
+    expect(persistentSidebar).toMatch(/\.sidebar nav\{[^}]*min-height:0/);
+    expect(persistentSidebar).toMatch(/\.sidebar-foot\{[^}]*flex:none/);
+  });
+
   it('lets the narrow-window safeguard win over persistent desktop sidebar rules', () => {
     const persistentSidebar = css.indexOf('/* Persistent side navigation:');
     const narrowSafeguard = css.indexOf(
