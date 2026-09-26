@@ -257,6 +257,11 @@ export class LocalJobsStore {
     return this.repository!.getServiceRequest(serviceRequestId);
   }
 
+  async listDurableServiceRequests(): Promise<ServiceRequest[]> {
+    await this.start();
+    return this.repository!.serviceRequests.orderBy('id').toArray();
+  }
+
   async convertServiceRequestToJob(input: Parameters<FieldsteadRepository['convertServiceRequestToJob']>[0]) {
     await this.start();
     const converted = await this.repository!.convertServiceRequestToJob(input);
@@ -339,6 +344,11 @@ export class LocalJobsStore {
   async getEstimateForJob(jobId: string) {
     await this.start();
     return this.repository!.getEstimateForJob(jobId);
+  }
+
+  async getInvoiceForJob(jobId: string) {
+    await this.start();
+    return this.repository!.getInvoiceForJob(jobId);
   }
 
   async saveEstimate(input: Parameters<FieldsteadRepository['saveEstimate']>[0]) {
@@ -451,6 +461,7 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     createJob: store.createJob.bind(store),
     createCustomer: store.createCustomer.bind(store),
     listDurableCustomers: store.listDurableCustomers.bind(store),
+    listDurableServiceRequests: store.listDurableServiceRequests.bind(store),
     getDurableServiceRequest: store.getDurableServiceRequest.bind(store),
     convertEmailIntake: store.convertEmailIntake.bind(store),
     linkCommunication: store.linkCommunication.bind(store),
@@ -466,6 +477,7 @@ export function useFieldsteadLocalJobs(fallbackJobs: Job[]) {
     previewRecurringServiceAgreement: store.previewRecurringServiceAgreement.bind(store),
     generateRecurringOccurrences: store.generateRecurringOccurrences.bind(store),
     getEstimateForJob: store.getEstimateForJob.bind(store),
+    getInvoiceForJob: store.getInvoiceForJob.bind(store),
     saveEstimate: store.saveEstimate.bind(store),
     buildOperationsReport,
     exportOperationsReportCsv,
