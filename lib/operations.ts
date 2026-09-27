@@ -63,6 +63,19 @@ export const seedState: OperationsState = {
 
 export const statusOrder: JobStatus[] = ['Quoted','Scheduled','En route','In progress','Completed'];
 
+export function describeOldestSentEstimate(jobs: Job[], now = new Date().toISOString()) {
+  const sent = jobs.filter((job) => job.quoteStatus === 'Sent');
+  if (!sent.length) return 'No estimates awaiting reply';
+  const sentTimes = sent.map((job) => Date.parse(job.quoteSentAt || '')).filter(Number.isFinite);
+  if (!sentTimes.length) return 'Sent date unavailable';
+  const nowTime = Date.parse(now);
+  if (!Number.isFinite(nowTime)) return 'Sent date unavailable';
+  const ageDays = Math.floor((nowTime - Math.min(...sentTimes)) / 86_400_000);
+  if (ageDays < 0) return 'Sent date needs review';
+  if (ageDays === 0) return 'Oldest marked sent today';
+  return `Oldest marked sent ${ageDays} day${ageDays === 1 ? '' : 's'} ago`;
+}
+
 export function nextAction(job: Job) {
   if (job.quoteStatus === 'Draft') return { label:'Send quote', reason:'Quote is ready for review', priority:'high' as const };
   if (job.quoteStatus === 'Sent') return { label:'Follow up on quote', reason:'Customer decision is pending', priority:'high' as const };

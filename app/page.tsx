@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   Activity, Customer, InvoiceStatus, Job, OperationsState,
-  advanceJob, createJob, nextAction, searchJobs, seedState, setInvoiceStatus,
+  advanceJob, createJob, describeOldestSentEstimate, nextAction, searchJobs, seedState, setInvoiceStatus,
   statusOrder, updateJob,
 } from '../lib/operations';
 import {
@@ -614,7 +614,7 @@ function Overview({ state, approvedPipeline, unpaid, attention, openJob, goToJob
       <article><p>Open jobs</p><strong>{state.jobs.filter((job) => !['Completed','Canceled'].includes(job.status)).length}</strong><small>{unscheduled ? `${unscheduled} approved, not scheduled` : 'All approved work is scheduled'}</small></article>
       <article><p>Approved pipeline</p><strong>{money.format(approvedPipeline)}</strong><small>Scheduled and active work</small></article>
       <article><p>Awaiting payment</p><strong>{money.format(unpaid)}</strong><small>{overdue} overdue invoice</small></article>
-      <article><p>Estimates awaiting reply</p><strong>{quotes}</strong><small>Oldest marked sent 4 days ago</small></article>
+      <article><p>Estimates awaiting reply</p><strong>{quotes}</strong><small>{describeOldestSentEstimate(state.jobs)}</small></article>
     </section>
     <section className="attention-card">
       <div className="section-title"><div><p className="eyebrow">NEXT ACTIONS</p><h2>Keep work moving</h2></div><button className="text-button" onClick={() => goToJobs()}>View all jobs →</button></div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advanceJob, createJob, nextAction, searchJobs, seedState, syntheticDemoState, setInvoiceStatus, setQuoteStatus, updateJob } from './operations';
+import { advanceJob, createJob, describeOldestSentEstimate, nextAction, searchJobs, seedState, syntheticDemoState, setInvoiceStatus, setQuoteStatus, updateJob } from './operations';
 
 describe('Fieldstead live workspace seed', () => {
   it('opens with no customer records or invented operational records', () => {
@@ -11,6 +11,20 @@ describe('Fieldstead live workspace seed', () => {
   it('keeps synthetic workflow fixtures separate from the live dogfood seed', () => {
     expect(syntheticDemoState.jobs.length).toBeGreaterThan(0);
     expect(syntheticDemoState.customers.every((customer) => customer.notes.includes('Synthetic dogfood record'))).toBe(true);
+  });
+});
+
+describe('estimate follow-up age', () => {
+  it('derives the oldest pending sent estimate age from current records', () => {
+    expect(describeOldestSentEstimate(syntheticDemoState.jobs, '2026-08-30T12:00:00-05:00')).toBe('Oldest marked sent 3 days ago');
+  });
+
+  it('does not invent an age when timestamps are absent or unusable', () => {
+    const sent = syntheticDemoState.jobs.filter((job) => job.quoteStatus === 'Sent');
+    expect(describeOldestSentEstimate([{ ...sent[0], quoteSentAt: '2026-08-30T11:00:00-05:00' }], '2026-08-30T12:00:00-05:00')).toBe('Oldest marked sent today');
+    expect(describeOldestSentEstimate([{ ...sent[0], quoteSentAt: '2026-08-31T11:00:00-05:00' }], '2026-08-30T12:00:00-05:00')).toBe('Sent date needs review');
+    expect(describeOldestSentEstimate([{ ...sent[0], quoteSentAt: 'not-a-date' }], '2026-08-30T12:00:00-05:00')).toBe('Sent date unavailable');
+    expect(describeOldestSentEstimate([], '2026-08-30T12:00:00-05:00')).toBe('No estimates awaiting reply');
   });
 });
 
