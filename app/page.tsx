@@ -13,7 +13,7 @@ import {
   type CsvMapping, type CsvRow, type StagedImport,
 } from '../lib/client-delivery';
 import { useFieldsteadLocalJobs } from './store/fieldstead-local';
-import { detectMailProvider, getMailProviderProfile } from '../lib/mail-provider';
+import { detectMailProvider, getMailProviderProfile, normalizeMailProvider } from '../lib/mail-provider';
 import { forwardSubject, replySubject, type EmailMessageAction } from '../lib/mail-actions';
 import { normalizeAppVersion, packageVersion } from '../lib/app-version';
 import { SetupWizard } from './setup/SetupWizard';
@@ -42,6 +42,7 @@ import type { OperationsReport, OperationsReportFilters } from '../packages/fiel
 
 type View = 'Overview' | 'Dispatch' | 'Assigned Jobs' | 'Jobs' | 'Customers' | 'Inventory' | 'Activity' | 'Client Delivery' | 'Email' | 'Finance' | 'Reporting' | 'Settings';
 type Theme = 'dark' | 'light';
+const viewLabels: Record<View, string> = { Overview: 'Overview', Dispatch: 'Dispatch', 'Assigned Jobs': 'Assigned Jobs', Jobs: 'Jobs', Customers: 'Customers', Inventory: 'Catalog & Assets', Activity: 'Activity', 'Client Delivery': 'Client Delivery', Email: 'Email', Finance: 'Finance', Reporting: 'Reporting', Settings: 'Settings' };
 type EmailConnectionInput = { provider: string; email: string; displayName: string; username: string; password: string; imap: { host: string; port: number; secure: boolean }; smtp: { host: string; port: number; secure: boolean } };
 type EmailMessage = RenderableEmailMessage & { subject: string; from: string; fromName: string; receivedAt: string; unread: boolean; starred?: boolean };
 type EmailAccount = { id: string; email: string; displayName?: string; provider?: string; lastTestedAt?: string | null; configured?: boolean };
@@ -334,7 +335,7 @@ export default function Home() {
         <nav aria-label="Main navigation">
           {(['Overview','Dispatch','Assigned Jobs','Jobs','Customers','Inventory','Activity','Client Delivery','Email','Finance','Reporting','Settings'] as View[]).map((item) => { const icon = ({ Overview: '⌂', Dispatch: '▦', 'Assigned Jobs': '✓', Jobs: '▤', Customers: '♧', Inventory: '◫', Activity: '◌', 'Client Delivery': '⇢', Email: '✉', Finance: '$', Reporting: '▥', Settings: '⚙' } as Record<View, string>)[item]; return (
             <button key={item} className={cx('nav-item', view === item && 'active')} onClick={() => setView(item)}>
-              <span className="nav-icon" aria-hidden="true">{icon}</span><span className="nav-label">{item}</span>{item === 'Jobs' && <b>{openJobs.length}</b>}
+              <span className="nav-icon" aria-hidden="true">{icon}</span><span className="nav-label">{viewLabels[item]}</span>{item === 'Jobs' && <b>{openJobs.length}</b>}
             </button>
           ); })}
         </nav>
@@ -479,7 +480,7 @@ function EmailView({ state, localData, openServiceRequestDetail }: { state: Oper
   }
   useEffect(() => { let cancelled = false; void window.fieldsteadDesktop?.getEmailAccounts().then((result) => { if (cancelled || !result) return; setAccounts(result.accounts || []); setActiveAccountId(result.activeAccountId || result.accounts?.[0]?.id || null); if (result.accounts?.length) setStatus(`Connected as ${result.accounts.find((account) => account.id === result.activeAccountId)?.email || result.accounts[0].email}.`); }); return () => { cancelled = true; }; }, []);
   function selectProvider(provider: string) {
-    const profile = getMailProviderProfile(provider);
+    const profile = getMailProviderProfile(normalizeMailProvider(provider));
     setConnection((current) => ({ ...current, provider: profile.id, imap: profile.imap, smtp: profile.smtp }));
     setStatus(provider === 'unknown' ? 'Choose your provider or enter the server settings supplied by your mail host.' : `${profile.name} settings loaded. Choose secure sign-in details to continue.`);
   }
@@ -797,7 +798,7 @@ function InventoryView({ localData }: { localData: ReturnType<typeof useFieldste
   async function deleteCatalogItem(itemId: string) { const occurredAt = new Date().toISOString(); await localData.deleteCatalogItem({ tenantId, itemId, actorId: 'Fieldstead owner', actorRole: 'owner_admin', occurredAt, auditEventId: `activity-${crypto.randomUUID()}` }); await refresh(); }
   async function saveEquipmentAsset(asset: Omit<EquipmentAsset, 'id'|'tenantId'|'audit'> & { id?: string }) { const occurredAt = new Date().toISOString(); const existing = asset.id ? equipmentAssets.find((candidate) => candidate.id === asset.id) : undefined; await localData.saveEquipmentAsset({ asset: { ...asset, id: asset.id || `equipment:${crypto.randomUUID()}`, tenantId, audit: { createdAt: existing?.audit.createdAt ?? occurredAt, createdBy: existing?.audit.createdBy ?? 'Fieldstead owner', updatedAt: occurredAt, updatedBy: 'Fieldstead owner' } }, actorId: 'Fieldstead owner', actorRole: 'owner_admin', occurredAt, auditEventId: `activity-${crypto.randomUUID()}` }); await refresh(); }
   async function deleteEquipmentAsset(assetId: string) { const occurredAt = new Date().toISOString(); await localData.deleteEquipmentAsset({ tenantId, assetId, actorId: 'Fieldstead owner', actorRole: 'owner_admin', occurredAt, auditEventId: `activity-${crypto.randomUUID()}` }); await refresh(); }
-  return <InventoryEquipmentAdmin catalogItems={catalogItems} equipmentAssets={equipmentAssets} onSaveCatalogItem={saveCatalogItem} onDeleteCatalogItem={deleteCatalogItem} onSaveEquipmentAsset={saveEquipmentAsset} onDeleteEquipmentAsset={deleteEquipmentAsset}/>;
+  return <><section className="value-strip"><div><span className="value-icon">◇</span><p><strong>Optional full-package capability</strong><br/>Catalog, equipment, and inventory references for businesses that need operational stock or asset tracking; not a core Starter office-workflow requirement.</p></div><span>Catalog &amp; Assets</span></section><InventoryEquipmentAdmin catalogItems={catalogItems} equipmentAssets={equipmentAssets} onSaveCatalogItem={saveCatalogItem} onDeleteCatalogItem={deleteCatalogItem} onSaveEquipmentAsset={saveEquipmentAsset} onDeleteEquipmentAsset={deleteEquipmentAsset}/></>;
 }
 
 function ServiceRequestDrawer({ serviceRequest, localData, close }: { serviceRequest: ServiceRequest; localData: ReturnType<typeof useFieldsteadLocalJobs>; close: () => void }) {

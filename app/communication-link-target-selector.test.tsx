@@ -6,7 +6,7 @@ import { CommunicationLinkTargetSelector } from './communication-link-target-sel
 
 const state = {
   customers: [{ id: 'customer-1', name: 'Jamie Rivera', email: 'jamie@example.com', phone: '', address: '', notes: '', createdAt: '2026-09-25T12:00:00.000Z' }],
-  jobs: [{ id: 'job-1', customerId: 'customer-1', service: 'Fence repair', description: '', status: 'Quoted', quoteStatus: 'Draft', quoteAmount: 125, invoiceStatus: 'Not created', invoiceAmount: 0, crew: '', createdAt: '2026-09-25T12:00:00.000Z', updatedAt: '2026-09-25T12:00:00.000Z' }],
+  jobs: [{ id: 'job-1', customerId: 'customer-1', service: 'Fence repair', description: '', status: 'Quoted', quoteStatus: 'Draft', quoteAmount: 125, invoiceStatus: 'Not created', invoiceAmount: 0, durationHours: 2, crew: '', createdAt: '2026-09-25T12:00:00.000Z', updatedAt: '2026-09-25T12:00:00.000Z' }],
   activity: [],
 } as OperationsState;
 const customers: Customer[] = [{ id: 'customer-1', displayName: 'Jamie Rivera', primaryEmail: 'jamie@example.com', sourceEmail: { accountId: 'account-1', messageId: 'old', normalizedFrom: 'jamie@example.com' }, audit: { createdAt: '2026-09-25T12:00:00.000Z', createdBy: 'owner', updatedAt: '2026-09-25T12:00:00.000Z', updatedBy: 'owner' } }];

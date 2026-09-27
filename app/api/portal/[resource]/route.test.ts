@@ -9,7 +9,7 @@ function request(method: string, path = '/api/portal/jobs', token?: string) {
 
 describe('portal route method and error boundary', () => {
   it('exposes GET and HEAD only and rejects mutations without touching a provider', async () => {
-    const response = await POST(request('POST'));
+    const response = POST();
     expect(response.status).toBe(405);
     expect(response.headers.get('allow')).toBe('GET, HEAD');
   });

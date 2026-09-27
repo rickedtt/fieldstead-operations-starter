@@ -34,7 +34,8 @@ async function defaultDryRunClient(input: CommunicationDryRunInput, authorizatio
     body: JSON.stringify(input),
   });
   const body = await response.json() as CommunicationDryRunResult | { error?: unknown };
-  if (!response.ok) throw new Error(typeof ('error' in body && body.error) === 'string' ? body.error : 'Communication preview unavailable.');
+  const error = 'error' in body ? body.error : undefined;
+  if (!response.ok) throw new Error(typeof error === 'string' ? error : 'Communication preview unavailable.');
   return body as CommunicationDryRunResult;
 }
 

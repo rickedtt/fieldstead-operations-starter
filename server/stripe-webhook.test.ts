@@ -30,7 +30,7 @@ describe('Stripe webhook boundary', () => {
 
     await expect(handleStripeWebhook({ rawBody, signature }, {
       verifier, repository: { reconcileCheckout },
-    })).rejects.toMatchObject<Partial<StripeWebhookError>>({ status: 400 });
+    })).rejects.toMatchObject({ status: 400 } satisfies Partial<StripeWebhookError>);
     expect(reconcileCheckout).not.toHaveBeenCalled();
   });
 
@@ -43,7 +43,7 @@ describe('Stripe webhook boundary', () => {
 
     await expect(handleStripeWebhook({ rawBody, signature }, {
       verifier, repository: { reconcileCheckout },
-    })).rejects.toMatchObject<Partial<StripeWebhookError>>({ status: 400 });
+    })).rejects.toMatchObject({ status: 400 } satisfies Partial<StripeWebhookError>);
     expect(reconcileCheckout).not.toHaveBeenCalled();
   });
 

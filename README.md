@@ -35,6 +35,7 @@ The program now follows the synchronized Starter definition used by the website 
 - Invoice and payment-status visibility as manual bookkeeping labels only.
 - Daily attention and follow-up list for callbacks, estimates, scheduling, unfinished work, and payment status.
 - Basic operational summaries, activity and decision history, configuration, training, handoff, and recovery planning.
+- **Catalog & Assets** is an optional full-package capability for inventory-heavy businesses: service/labor units, materials, software or license costs, subcontractors, pass-through hardware, and loaner or billable equipment. It is not a core Operations Starter requirement for the office-first CRM workflow, and the existing inventory records and routes remain supported.
 
 ## What works in this dogfood build
 

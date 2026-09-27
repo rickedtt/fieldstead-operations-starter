@@ -103,13 +103,15 @@
 - [ ] Model fees, partial payments, refunds, chargebacks, deposits, and payout reconciliation.
 - [ ] Never store raw card data; document PCI/provider boundaries and incident response.
 
-## Stage 7 — Inventory and job costing
+## Stage 7 — Optional catalog, assets, inventory, and job costing
 
-- [ ] Model catalog items, units, vendors, purchase cost, stock locations, and reorder thresholds.
-- [ ] Add job material/labor/equipment estimates and actuals.
-- [ ] Add purchase/receipt/adjustment flows with audit and negative-stock policy.
-- [ ] Add gross-margin and variance views tied to completed jobs and invoice records.
-- [ ] Map inventory/accounting behavior only after Finance contracts are stable.
+This is an optional full-package capability for inventory-heavy businesses, not a core Starter requirement for the office-first CRM workflow. Preserve existing Inventory routes, records, schemas, and migration compatibility while presenting the capability as **Catalog & Assets** in Starter-facing navigation.
+
+- [x] Keep the Starter scope as an optional reference catalog for labor/service units, recurring software or licenses, subcontractors, pass-through hardware, and loaner or billable equipment.
+- [x] Make the Starter boundary explicit: quantities are administrative references and job-cost selections do not decrement stock.
+- [ ] Add job labor/service/software/equipment estimates and actuals with gross-margin and variance views tied to completed jobs and invoice records.
+- [ ] Keep warehouse stock, purchasing/receiving, reorder thresholds, depreciation, and fixed-asset accounting out of the Starter package; add them only for a client segment with demonstrated physical-inventory needs.
+- [ ] Map any future inventory/accounting behavior only after Finance contracts are stable.
 
 ## Stage 8 — Reporting and automation
 

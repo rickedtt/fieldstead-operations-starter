@@ -8,13 +8,16 @@ const audit = { createdAt: '2026-09-26T12:00:00.000Z', createdBy: 'owner', updat
 describe('InventoryEquipmentAdmin', () => {
   it('renders accessible catalog and equipment editors with explicit save boundaries', () => {
     const html = renderToStaticMarkup(<InventoryEquipmentAdmin catalogItems={[{ id: 'catalog-1', tenantId: 'local-owner', name: 'Mulch', unit: 'yard', quantity: 4, unitCostCents: 4200, active: true, audit }]} equipmentAssets={[{ id: 'asset-1', tenantId: 'local-owner', name: 'Mini skid steer', quantity: 1, hourlyCostCents: 6800, active: true, audit }]} onSaveCatalogItem={vi.fn()} onDeleteCatalogItem={vi.fn()} onSaveEquipmentAsset={vi.fn()} onDeleteEquipmentAsset={vi.fn()} />);
-    expect(html).toContain('Inventory and equipment administration');
+    expect(html).toContain('Service catalog and equipment administration');
     expect(html).toContain('Save catalog item');
     expect(html).toContain('Save equipment asset');
     expect(html).toContain('Mulch');
     expect(html).toContain('Mini skid steer');
     expect(html).toContain('Edit catalog item Mulch');
     expect(html).toContain('Edit equipment asset Mini skid steer');
+    expect(html).toContain('Services, software, and pass-through costs');
+    expect(html).toContain('labor units, recurring software or licenses, subcontractors, pass-through hardware');
+    expect(html).toContain('Do not use it as a warehouse or fixed-asset register');
     expect(html).toContain('Explicit local save only');
     expect(html).not.toContain('Purchase');
   });
