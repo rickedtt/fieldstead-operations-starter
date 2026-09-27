@@ -2,6 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { APP_ID, PRODUCT_NAME } from '../electron/desktop-config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,15 +66,24 @@ requireValue(
 );
 
 const mailProviderSource = await readFile(path.join(root, 'lib/mail-provider.ts'), 'utf8');
-const expectedMailProviderRuntime = mailProviderSource
-  .replaceAll(/export function /g, 'function ')
-  .replaceAll(/export const /g, 'const ')
-  + '\nexport { detectMailProvider, getMailProviderProfile, normalizeMailProvider };\n';
+const expectedMailProviderRuntime = ts.transpileModule(mailProviderSource, {
+  compilerOptions: {
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ES2022,
+  },
+  fileName: 'mail-provider.ts',
+  reportDiagnostics: true,
+});
 const mailProviderRuntime = await readFile(path.join(root, 'lib/mail-provider-runtime.mjs'), 'utf8');
 requireValue(
-  mailProviderRuntime === expectedMailProviderRuntime,
+  !expectedMailProviderRuntime.diagnostics?.length && mailProviderRuntime === expectedMailProviderRuntime.outputText,
   'lib/mail-provider-runtime.mjs is stale; run npm run desktop:prepare-server',
 );
+try {
+  await import(`${new URL('../lib/mail-provider-runtime.mjs', import.meta.url).href}?validate=${Date.now()}`);
+} catch (error) {
+  failures.push(`lib/mail-provider-runtime.mjs is not valid executable JavaScript: ${error.message}`);
+}
 
 if (failures.length > 0) {
   console.error(failures.map((failure) => `- ${failure}`).join('\n'));
