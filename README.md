@@ -64,10 +64,6 @@ Before any real customer deployment, Fieldstead would need an explicit security 
 
 Those boundaries are intentionally outside this internal dogfood build. Do not treat the current application as production-ready or deploy it with real customer data.
 
-## Manual ChatGPT Work handoff
-
-For review, drafting, planning, or patch-proposal tasks that can be handled in a separate ChatGPT Work session, use the local copy/paste packet generator documented in [`docs/chatgpt-work-handoff.md`](docs/chatgpt-work-handoff.md). It does not configure ChatGPT Work as a provider, inspect credentials, or change Hermes model/provider settings; Hermes remains responsible for applying and testing returned work locally.
-
 ## Cross-platform dogfood boundary
 
 The app is designed to be exercised on both a Windows laptop and the Linux Omarchy machine. Each device uses durable local IndexedDB storage and records changes in an outbox. The repository includes a versioned, authenticated sync protocol and server route foundation with idempotency, tenant scoping, role checks, and conflict records.
