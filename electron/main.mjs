@@ -7,9 +7,11 @@ import fsSync from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, screen, session, shell } from 'electron';
 
-// Omarchy compatibility: use X11 without disabling every Chromium fallback.
-// In particular, do not combine --disable-gpu with --disable-software-rasterizer.
+// Omarchy compatibility: keep X11 and bypass Chromium's repeatedly crashing
+// Haswell/Mesa GPU subprocess. Keep the software rasterizer available.
 app.commandLine.appendSwitch('ozone-platform', 'x11');
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
 import { clearEmailConfig, emailBulkAction, emailMessageAction, getEmailAccounts, getEmailAttachmentMetadata, getEmailConfig, previewEmailAttachment, saveEmailAttachment, saveEmailConfig, sendEmail, syncEmail, testEmailConnection } from './email-service.mjs';
 import { createSetupStore } from './setup-store.mjs';
 import { openSafeExternalLink } from './external-link.mjs';
