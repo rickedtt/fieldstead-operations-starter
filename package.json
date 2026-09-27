@@ -1,5 +1,6 @@
 {
   "name": "fieldstead-operations-starter",
+  "desktopName": "fieldstead-operations-starter",
   "version": "0.2.49",
   "private": true,
   "description": "Fieldstead Systems internal Operations Starter dogfood system.",
@@ -188,6 +189,8 @@
     },
     "linux": {
       "icon": "build/icon.png",
+      "category": "Office",
+      "syncDesktopName": true,
       "target": [
         {
           "target": "AppImage",

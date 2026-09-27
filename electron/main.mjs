@@ -56,6 +56,10 @@ function publishUpdateStatus(status) {
   mainWindow?.webContents.send('fieldstead-update-status', status);
 }
 
+function canUsePackagedUpdater() {
+  return app.isPackaged && (process.platform !== 'linux' || Boolean(process.env.APPIMAGE));
+}
+
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 for (const event of ['checking-for-update', 'update-available', 'update-not-available', 'download-progress', 'update-downloaded', 'error']) {
@@ -177,6 +181,7 @@ ipcMain.handle('fieldstead:app-version', () => app.getVersion());
 
 ipcMain.handle('fieldstead:check-for-updates', async () => {
   if (!app.isPackaged) return { status: 'development', message: 'Updates are checked from the packaged GitHub release.' };
+  if (!canUsePackagedUpdater()) return { status: 'unavailable', message: 'Linux updates require launching the packaged AppImage.' };
   try {
     const result = await autoUpdater.checkForUpdates();
     const available = result?.updateInfo?.version && result.updateInfo.version !== app.getVersion();
@@ -187,11 +192,13 @@ ipcMain.handle('fieldstead:check-for-updates', async () => {
 });
 
 ipcMain.handle('fieldstead:download-update', async () => {
+  if (!canUsePackagedUpdater()) return { status: 'unavailable', message: 'Linux updates require launching the packaged AppImage.' };
   try { await autoUpdater.downloadUpdate(); return { status: 'downloading' }; }
   catch (error) { return { status: 'error', message: error instanceof Error ? error.message : String(error) }; }
 });
 
 ipcMain.handle('fieldstead:install-update', () => {
+  if (!canUsePackagedUpdater()) return { status: 'unavailable', message: 'Linux updates require launching the packaged AppImage.' };
   allowQuit = true;
   autoUpdater.quitAndInstall();
   return { status: 'installing' };
@@ -385,7 +392,7 @@ app.whenReady().then(async () => {
     const child = startServer(port);
     await waitForServer(url, child);
     await createWindow(url);
-    if (app.isPackaged) void Promise.resolve(autoUpdater.checkForUpdates()).catch(() => undefined);
+    if (canUsePackagedUpdater()) void Promise.resolve(autoUpdater.checkForUpdates()).catch(() => undefined);
   } catch (error) {
     await stopServer();
     dialog.showErrorBox(

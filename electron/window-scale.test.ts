@@ -12,4 +12,10 @@ describe('desktop window scale', () => {
     expect(main).not.toContain("app.commandLine.appendSwitch('disable-software-rasterizer')");
     expect(main).toMatch(/webContents\.on\('did-finish-load',[\s\S]*?setZoomFactor\(1\)/);
   });
+
+  it('does not invoke the AppImage updater from an extracted Linux package', () => {
+    expect(main).toContain("process.platform !== 'linux' || Boolean(process.env.APPIMAGE)");
+    expect(main).toContain("if (canUsePackagedUpdater()) void Promise.resolve(autoUpdater.checkForUpdates())");
+    expect(main).toContain('Linux updates require launching the packaged AppImage.');
+  });
 });
